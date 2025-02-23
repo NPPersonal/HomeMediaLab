@@ -3,7 +3,7 @@ services:
   tunnel:
     container_name: cloudflare_tunnel
     image: cloudflare/cloudflared
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate run --token $TUNNEL_TOKEN
 
   nginx:
     container_name: nginx
