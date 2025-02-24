@@ -1,9 +1,27 @@
 name: Cloudflare_Nginx_Tunnel
+
+networks:
+  default:
+    driver: bridge
+  socket_proxy:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.91.0/24
+include:
+  - composes/socket-proxy.yaml
+  - composes/portainer.yaml
+
+volumes:
+  portainer_data:
+
 services:
   tunnel:
     container_name: cloudflare_tunnel
     image: cloudflare/cloudflared
     command: tunnel --no-autoupdate run --token $TUNNEL_TOKEN
+    networks:
+      - socket_proxy
 
   nginx:
     container_name: nginx
