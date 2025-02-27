@@ -1,0 +1,15 @@
+- Monitor:
+    - Portainer:
+        icon: https://static-00.iconduck.com/assets.00/portainer-icon-732x1024-dlqoqekr.png
+        href: http://localhost:9000
+        description: Monitoring docker container
+    - Dozzle:
+        icon: https://developer.asustor.com/uploadIcons/0020_117518_1660879946_dozzle_256.png
+        href: http://localhost:8082
+        description: Monitoring logs for docker container
+- Media:
+    - Jellyfin:
+        icon: https://play-lh.googleusercontent.com/4HqpSrfVpYUaqOKVyRk8G5J7S9eCgp-iqGXUhJCGB0O0XlTmuOOXqRKwdbMnehRlrA
+        href: http://localhost:8096
+        description: Watch media
+- Other:

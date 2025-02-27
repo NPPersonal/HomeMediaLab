@@ -1,0 +1,30 @@
+services:
+  # Jellyfin - Media Server
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    networks:
+      - default
+      - socket_proxy
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    # profiles: ["media", "all"]
+    # user: $PUID:$PGID
+    devices:
+      - /dev/dri:/dev/dri # for harware transcoding
+    ports:
+      - "8096:8096"
+      # - "8920:8920" # Emby also uses same port if running both
+    environment:
+      UMASK_SET: 022
+      TZ: $TZ
+    volumes:
+      - ./storage/jellyfin_data/config:/config
+      - ./storage/jellyfin_data/cache:/cache
+      - ./storage/jellyfin_data/media:/media
+      - ./storage/jellyfin_data/media2:/media2
+      - ./storage/jellyfin_data/fonts/custom:/usr/local/share/fonts/custom
+      - ./storage/jellyfin_data/fonts/fallback:/fallback_fonts
+      - ./storage/jellyfin_data/downloads:/downloads
+      # - ./storage/jellyfin_data/dev/shm:/data/transcode # Offload transcoding to RAM if you have enough RAM

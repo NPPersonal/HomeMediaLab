@@ -14,6 +14,8 @@ include:
   - composes/portainer.yaml
   - composes/dozzle.yaml
   - composes/home-page.yaml
+  # Media
+  - composes/jellyfin.yaml
 
 # volumes:
 #   portainer_data:
