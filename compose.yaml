@@ -11,9 +11,10 @@ networks:
 include:
   - composes/socket-proxy.yaml
   - composes/portainer.yaml
+  - composes/dozzle.yaml
 
-volumes:
-  portainer_data:
+# volumes:
+#   portainer_data:
 
 services:
   tunnel:
