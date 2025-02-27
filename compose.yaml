@@ -9,9 +9,11 @@ networks:
       config:
         - subnet: 192.168.91.0/24
 include:
+  # Core
   - composes/socket-proxy.yaml
   - composes/portainer.yaml
   - composes/dozzle.yaml
+  - composes/home-page.yaml
 
 # volumes:
 #   portainer_data:

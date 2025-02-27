@@ -17,4 +17,4 @@ services:
       # - /var/run/docker.sock:/var/run/docker.sock:ro # # Use Docker Socket Proxy instead for improved security
       - ./storage/portainer_data:/data # Change to local directory if you want to save/transfer config locally
     environment:
-      - TZ=Asia/Taipei
+      - TZ=$TZ
