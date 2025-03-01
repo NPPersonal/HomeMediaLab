@@ -5,7 +5,6 @@ services:
     container_name: jellyfin
     networks:
       - default
-      - socket_proxy
     security_opt:
       - no-new-privileges:true
     restart: "no"

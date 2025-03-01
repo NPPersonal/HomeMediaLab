@@ -26,10 +26,10 @@ services:
     image: cloudflare/cloudflared
     command: tunnel --no-autoupdate run --token $TUNNEL_TOKEN
     networks:
-      - socket_proxy
+      - default
 
-  nginx:
-    container_name: nginx
-    build: ./nginx
-    ports:
-      - 8080:80
+  # nginx:
+  #   container_name: nginx
+  #   build: ./nginx
+  #   ports:
+  #     - 8080:80

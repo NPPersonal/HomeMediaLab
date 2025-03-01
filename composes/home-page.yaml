@@ -8,7 +8,6 @@ services:
     restart: unless-stopped
     # profiles: ["apps", "all"]
     networks:
-      - socket_proxy
       - default
     ports:
       - "3000:3000"
