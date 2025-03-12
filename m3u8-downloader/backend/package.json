@@ -1,0 +1,20 @@
+{
+  "name": "m3u8-downloader",
+  "version": "1.0.0",
+  "description": "m3u8 download manager",
+  "main": "app.mjs",
+  "scripts": {
+    "dev": "nodemon app.mjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "m3u8"
+  ],
+  "author": "ming chun",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "hlsdownloader": "^3.3.1",
+    "uuid": "^11.1.0"
+  }
+}
