@@ -2,7 +2,7 @@ import { spawn } from "child_process";
 import path from "node:path";
 import fs from "fs";
 import HLSDownloader from "hlsdownloader";
-import { TS_LIST_FILENAME } from "./constant.mjs";
+import { TS_LIST_FILENAME } from "./constant.js";
 
 export const createDownloader = (
   downloadDir,

@@ -1,4 +1,5 @@
 https://www.simplehomelab.com/docker-media-server-2024/
+https://github.com/renmu123/m3u8-downloader
 
 # Deployment
 
