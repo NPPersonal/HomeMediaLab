@@ -26,7 +26,8 @@ app.get("/test", (req, res) => {
   const workingPath = path.join(TEMP_DIR, id);
   const downloader = new M3U8Downloader(M3U8_TEST_URL, "output/out.mp4", {
     mergeSegments: true,
-    clean: false,
+    convert2Mp4: true,
+    clean: true,
     segmentsDir: workingPath, // the directory to store downloaded segments
   });
   tasks.push(downloader);

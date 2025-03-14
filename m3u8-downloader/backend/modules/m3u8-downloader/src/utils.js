@@ -1,4 +1,4 @@
-import axios from "axios";
+import path from "node:path";
 
 /**
  * Check if it is url
@@ -25,4 +25,12 @@ export function getDateTimeNow() {
  */
 export function dateTimeLog(message) {
   return `${getDateTimeNow()}: ${message}`;
+}
+
+export function isValidFileExtension(filePath, validExtensions = []) {
+  const fileExt = path.basename(filePath).split(".").pop();
+  if (fileExt) {
+    return validExtensions.includes(fileExt.toLowerCase());
+  }
+  return false;
 }

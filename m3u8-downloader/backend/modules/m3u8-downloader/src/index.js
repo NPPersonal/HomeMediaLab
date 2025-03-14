@@ -15,9 +15,11 @@ import {
   States,
 } from "./types.js";
 import { dateTimeLog } from "./utils.js";
+import { isValidFileExtension } from "./utils.js";
 
 export { DefaultOptions, DefaultProgress, DefaultReport, EventTypes, States };
 
+const supportedFileConversions = ["mp4"];
 export default class M3U8Downloader extends EventEmitter {
   /**
    * M3U8Downloader
@@ -60,9 +62,15 @@ export default class M3U8Downloader extends EventEmitter {
       }
 
       // Make directory for output if it dosen't exists
-      const outputDir = path.dirname(this.output);
-      if (!(await fs.pathExists(outputDir))) {
-        await fs.mkdir(outputDir, { recursive: true });
+      if (this.options.convert2Mp4) {
+        const outputDir = path.dirname(this.output);
+        if (!(await fs.pathExists(outputDir))) {
+          await fs.mkdir(outputDir, { recursive: true });
+        }
+      } else {
+        console.warn(
+          "output directory will not be created as conversion is disabled"
+        );
       }
 
       // Fetch m3u8 file from url
@@ -90,7 +98,27 @@ export default class M3U8Downloader extends EventEmitter {
 
         // If merged .ts file need to be convert to mp4
         if (this.options.convert2Mp4) {
-          await this.convertToMp4(tsMediaPath);
+          if (this.output) {
+            if (isValidFileExtension(this.output, supportedFileConversions)) {
+              await this.convertToMp4(tsMediaPath);
+            } else {
+              fs.unlinkSync(inputFilePath);
+              this.emit(
+                EventTypes.Error,
+                new Error(
+                  `Unable to convert to mp4, output ${this.output} is not a valid file types\nSupported file types are: ${supportedFileConversions}`
+                )
+              );
+            }
+          } else {
+            fs.unlinkSync(inputFilePath);
+            this.emit(
+              EventTypes.Error,
+              new Error(
+                `Unable to convert to mp4, output ${this.output} was not given`
+              )
+            );
+          }
         }
       }
 
@@ -336,7 +364,7 @@ export default class M3U8Downloader extends EventEmitter {
     const outputFilePath = this.output;
 
     return new Promise((resolve, reject) => {
-      this.on(EventTypes.Converting, inputFilePath);
+      this.emit(EventTypes.Converting, inputFilePath);
 
       // Use ffmpeg to convert merged .ts file into .mp4
       // with command in a child process
@@ -456,7 +484,6 @@ export default class M3U8Downloader extends EventEmitter {
       console.error(error);
       this.status = States.Error;
       this.eventLogs.push(dateTimeLog(`Error: ${error.message}`));
-      this.cleanUpDownloadedFiles();
     });
     this.on(EventTypes.Completed, () => {
       this.status = States.Completed;
