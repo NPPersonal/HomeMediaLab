@@ -36,8 +36,8 @@ app.get("/test", (req, res) => {
     );
   });
 
-  downloader.on(EventTypes.Completed, () => {
-    console.log("Download completed");
+  downloader.on(EventTypes.Completed, (report) => {
+    console.log("Download completed", report);
   });
 
   downloader.on(EventTypes.Error, (error) => {

@@ -1,4 +1,3 @@
-import os from "node:os";
 import fs from "fs-extra";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -8,81 +7,16 @@ import axiosRetry from "axios-retry";
 import PQueue from "p-queue";
 import * as m3u8Parser from "m3u8-parser";
 import { isUrl } from "./utils.js";
+import {
+  DefaultOptions,
+  DefaultProgress,
+  DefaultReport,
+  EventTypes,
+  States,
+} from "./types.js";
+import { dateTimeLog } from "./utils.js";
 
-export const EventTypes = {
-  /** Listener: () => void */
-  Start: "start",
-  /** Listener: () => void */
-  Completed: "completed",
-  /** Listener: () => void */
-  Canceled: "canceled",
-  /** Listener: () => void */
-  Pause: "pause",
-  /** Listener: () => void */
-  Resume: "resume",
-  /**
-   * Listener: (outputFilePath) => void
-   *
-   * @param {*} outputFilePath path to output file
-   */
-  Converted: "converted",
-  /**
-   * Listener: (progress) => void
-   * 
-   * @param {*} progress an object
-   * ```
-   * {
-      url: `url to .ts file(segment) as string`,
-      downloadedFile: `path to .ts file as string`,
-      downloaded: `current downloaded file index as number`,
-      total: `total .ts files need to be downloaded as number`,
-    }
-      ```
-   */
-  Progress: "progress",
-  /**
-   * Listener: (error) => void
-   *
-   * @param {*} error Error
-   */
-  Error: "error",
-};
-
-const States = Object.assign(EventTypes, {
-  Running: "running",
-});
-
-const defaultOptions = {
-  /** How many concurrent download to run */
-  concurrency: 5,
-  /** Whether to convert segments to mp4 file or not,
-   * if true then mergeSegments must be true otherwise
-   * it will not do conversion
-   */
-  convert2Mp4: false,
-  /** Whether to merge segements into single .ts file or not  */
-  mergeSegments: true,
-  /** Directory to store .ts files default to OS tmp directory */
-  segmentsDir: os.tmpdir(),
-  /** How many time to retry when download fail */
-  retries: 3,
-  /** Path to FFMPEG excutable file */
-  ffmpegPath: "ffmpeg",
-  /** Whether to clean files in directory when job is done */
-  clean: true,
-  /** Start index for picking a range of .ts file to download default to 0 */
-  startIndex: 0,
-  /** End index for picking a range of .ts file to download default to undefined
-   * which refer to end of .ts file url list
-   */
-  endIndex: undefined,
-  /** Whether to skip download for a .ts file or not if it already exists  */
-  skipExistSegments: false,
-  /** Extra header key/value pair for http/https while requesting a .ts file from the url*/
-  headers: {},
-  /** If true then download/merging/conversion process will stop, otherwise it will continue */
-  interruptOnError: false,
-};
+export { DefaultOptions, DefaultProgress, DefaultReport, EventTypes, States };
 
 export default class M3U8Downloader extends EventEmitter {
   /**
@@ -90,40 +24,27 @@ export default class M3U8Downloader extends EventEmitter {
    *
    * @param {string} m3u8Url url to m3u8 file
    * @param {string} output output path (e.g file/video/out.mp4)
-   * @param {defaultOptions} options options as object
+   * @param {DefaultOptions} options options as object
    */
-  constructor(m3u8Url, output, options = defaultOptions) {
+  constructor(m3u8Url, output, options = DefaultOptions) {
     super();
-    this.options = Object.assign(defaultOptions, options);
+    this.options = Object.assign(DefaultOptions, options);
     this.m3u8Url = m3u8Url;
     this.output = output;
     this.segmentsDir = this.options.segmentsDir;
     this.queue = new PQueue({ concurrency: this.options.concurrency });
     this.totalSegments = 0;
     this.downloadedSegments = 0;
+    this.downloadFailedSegments = 0;
     this.downloadedFiles = [];
+    this.eventLogs = [];
 
     // Setup axio retry download
     axiosRetry(axios, {
       retries: this.options.retries,
       retryDelay: axiosRetry.exponentialDelay,
     });
-
-    /**
-     * Listen to events and perform relative task
-     */
-    this.on(EventTypes.Canceled, () => {
-      this.status = States.Canceled;
-      this.cleanUpDownloadedFiles();
-    });
-    this.on(EventTypes.Error, async (error) => {
-      console.error(error);
-      this.status = States.Error;
-      this.cleanUpDownloadedFiles();
-    });
-    this.on(EventTypes.Completed, () => {
-      this.status = States.Completed;
-    });
+    this.registerInternalListeners();
   }
 
   // #region public
@@ -162,7 +83,10 @@ export default class M3U8Downloader extends EventEmitter {
 
       // If downloaded .ts files need to be merged
       if (this.options.mergeSegments) {
-        const tsMediaPath = await this.mergeTsSegments(this.totalSegments);
+        const tsMediaPath = await this.mergeTsSegments(
+          this.totalSegments,
+          this.options.deleteMergeSources
+        );
 
         // If merged .ts file need to be convert to mp4
         if (this.options.convert2Mp4) {
@@ -174,7 +98,7 @@ export default class M3U8Downloader extends EventEmitter {
         await this.cleanUpDownloadedFiles();
         return;
       }
-      this.emit("completed");
+      this.emit("completed", this.generateReport());
     } catch (error) {
       this.emit(EventTypes.Error, error);
     }
@@ -266,6 +190,7 @@ export default class M3U8Downloader extends EventEmitter {
       this.queue
         .add(() => this.downloadSegment(tsUrl, index))
         .catch((error) => {
+          this.downloadFailedSegments++;
           this.emit(
             EventTypes.Error,
             new Error(
@@ -299,12 +224,12 @@ export default class M3U8Downloader extends EventEmitter {
     // If segment file exists and don't override it
     if (this.options.skipExistSegments && (await fs.pathExists(segmentPath))) {
       this.downloadedSegments++;
-      const progress = {
+      const progress = Object.assign(DefaultProgress, {
         url: tsUrl,
         downloadedFile: segmentPath,
         downloaded: this.downloadedSegments,
         total: this.totalSegments,
-      };
+      });
       this.emit(EventTypes.Progress, progress);
       return progress;
     }
@@ -323,12 +248,12 @@ export default class M3U8Downloader extends EventEmitter {
     await fs.writeFile(segmentPath, response.data);
     this.downloadedFiles.push(segmentPath);
     this.downloadedSegments++;
-    const progress = {
+    const progress = Object.assign(DefaultProgress, {
       url: tsUrl,
       downloadedFile: segmentPath,
       downloaded: this.downloadedSegments,
       total: this.totalSegments,
-    };
+    });
     this.emit(EventTypes.Progress, progress);
 
     return progress;
@@ -344,6 +269,7 @@ export default class M3U8Downloader extends EventEmitter {
    */
   async mergeTsSegments(total, deleteSource = true) {
     if (!this.isRunning()) return;
+
     let mergedFilePath = path.resolve(this.segmentsDir, "output.ts");
 
     if (!this.options.convert2Mp4) {
@@ -352,6 +278,8 @@ export default class M3U8Downloader extends EventEmitter {
 
     // Create a writable file stream
     const writeStream = fs.createWriteStream(mergedFilePath);
+
+    this.emit(EventTypes.Merging);
 
     for (let index = 0; index < total; index++) {
       if (!this.isRunning()) {
@@ -391,6 +319,7 @@ export default class M3U8Downloader extends EventEmitter {
     }
 
     writeStream.end();
+    this.emit(EventTypes.Merged, mergedFilePath);
     return mergedFilePath;
   }
 
@@ -407,6 +336,8 @@ export default class M3U8Downloader extends EventEmitter {
     const outputFilePath = this.output;
 
     return new Promise((resolve, reject) => {
+      this.on(EventTypes.Converting, inputFilePath);
+
       // Use ffmpeg to convert merged .ts file into .mp4
       // with command in a child process
       const ffmpeg = spawn(this.options.ffmpegPath, [
@@ -471,6 +402,66 @@ export default class M3U8Downloader extends EventEmitter {
     } else {
       return this.status === States.Running;
     }
+  }
+
+  /**
+   * Generate a report
+   * @returns a report object
+   */
+  generateReport() {
+    return Object.assign(DefaultReport, {
+      url: this.m3u8Url,
+      output: this.output,
+      totalSegments: this.totalSegments,
+      downloadedSegments: this.downloadedSegments,
+      downloadFailedSegments: this.downloadFailedSegments,
+      downloadedFiles: this.downloadedFiles,
+      eventLogs: this.eventLogs,
+    });
+  }
+
+  /**
+   * Listen to events and perform relative task
+   */
+  registerInternalListeners() {
+    this.on(EventTypes.Start, () => {
+      this.eventLogs.push(dateTimeLog("Download started"));
+    });
+    this.on(EventTypes.Pause, () => {
+      this.eventLogs.push(dateTimeLog("Download paused"));
+    });
+    this.on(EventTypes.Resume, () => {
+      this.eventLogs.push(dateTimeLog("Download resumed"));
+    });
+    this.on(EventTypes.Merging, () => {
+      this.eventLogs.push(dateTimeLog("Merging segments"));
+    });
+    this.on(EventTypes.Merged, () => {
+      this.eventLogs.push(dateTimeLog("Merge segements completed"));
+    });
+    this.on(EventTypes.Converting, (inputFilePath) => {
+      this.eventLogs.push(dateTimeLog(`Converting file ${inputFilePath}`));
+    });
+    this.on(EventTypes.Converted, (outputFilePath) => {
+      this.eventLogs.push(
+        dateTimeLog(`Conversion completed at ${outputFilePath}`)
+      );
+    });
+    this.on(EventTypes.Canceled, () => {
+      this.status = States.Canceled;
+      this.eventLogs.push(dateTimeLog("Download canceled"));
+      this.cleanUpDownloadedFiles();
+    });
+    this.on(EventTypes.Error, async (error) => {
+      console.error(error);
+      this.status = States.Error;
+      this.eventLogs.push(dateTimeLog(`Error: ${error.message}`));
+      this.cleanUpDownloadedFiles();
+    });
+    this.on(EventTypes.Completed, () => {
+      this.status = States.Completed;
+      this.eventLogs.push(dateTimeLog("Download completed"));
+    });
   }
   // #endregion private
 }
