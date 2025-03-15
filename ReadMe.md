@@ -42,7 +42,7 @@ This is planned to have backend server and frontend web.
 
 Server side have a module `m3u8-downloader` which is written in ES6 javascript and it is improved on https://github.com/renmu123/m3u8-downloader. Source code is located under `project_directory/m3u8-downloader/modules/m3u8-downloader`. The module is used for download .m3u8 file and its streaming video segments. In addition the module is able to merge streaming video segments into mp4 file with ffmpeg. Therefore the environment required to install ffmpeg first.
 
-Features:
+### Features:
 
 > - Concurrent downloading of M3U8 video segments
 > - Automatic retry on download failure
@@ -50,7 +50,7 @@ Features:
 > - Merging TS segments into a single file
 > - Optional conversion of TS files to MP4 format
 
-New features:
+### New features:
 
 > - Add more events
 > - Choose either to intrrupt downloader or continue download while encountering an error
@@ -59,7 +59,42 @@ New features:
 > - Able to differentiate master m3u8 file or m3u8 playlist, where master m3u8 file contain 1 to many urls reference to
 >   other m3u8 playlist file
 
-Implementatoin change:
+### Implementatoin change:
 
 > - ES6 javascript instead of typescript(original implementation)
 > - Using [eventemitter3](https://www.npmjs.com/package/eventemitter3) for events emitting and handling
+
+### Usage
+
+ES6 javascript
+
+```
+import M3U8Downloader, {EventTypes,} from "./modules/m3u8-downloader/src/index.js";
+
+const downloader = new M3U8Downloader("to/m3u8/file/url", "output/out.mp4", {
+    mergeSegments: true,
+    convert2Mp4: true,
+    clean: true,
+    segmentsDir: "path/to/segments/download/directory"
+  });
+
+  // listen event on download progress
+  downloader.on(EventTypes.Progress, (progress) => {
+    console.log(
+      `Download progress: ${progress.downloaded}/${progress.total} ${progress.url}`
+    );
+  });
+
+  // listen event on download completed
+  downloader.on(EventTypes.Completed, (report) => {
+    console.log("Download completed", report);
+  });
+
+  // listen event when download error
+  downloader.on(EventTypes.Error, (error) => {
+    console.error("Error occurred:", error);
+  });
+
+  // start download task
+  downloader.download();
+```
