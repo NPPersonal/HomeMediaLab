@@ -40,7 +40,7 @@ This is planned to have backend server and frontend web.
 
 ## Backend
 
-m3u8 backend downloader is base on https://github.com/renmu123/m3u8-downloader and then improve on it.
+Server side have a module `m3u8-downloader` which is written in ES6 javascript and it is improved on https://github.com/renmu123/m3u8-downloader. Source code is located under `project_directory/m3u8-downloader/modules/m3u8-downloader`. The module is used for download .m3u8 file and its streaming video segments. In addition the module is able to merge streaming video segments into mp4 file with ffmpeg. Therefore the environment required to install ffmpeg first.
 
 Features:
 
@@ -56,6 +56,8 @@ New features:
 > - Choose either to intrrupt downloader or continue download while encountering an error
 > - Don't convert TS files to MP4 format if output file path is not valid, this include file extension check
 > - Report detail after downloader completed
+> - Able to differentiate master m3u8 file or m3u8 playlist, where master m3u8 file contain 1 to many urls reference to
+>   other m3u8 playlist file
 
 Implementatoin change:
 

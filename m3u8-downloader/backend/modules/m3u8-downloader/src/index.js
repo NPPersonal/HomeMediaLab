@@ -6,7 +6,7 @@ import axios from "axios";
 import axiosRetry from "axios-retry";
 import PQueue from "p-queue";
 import * as m3u8Parser from "m3u8-parser";
-import { isUrl } from "./utils.js";
+import { combineURL, getBaseURL, isUrl } from "./utils.js";
 import {
   DefaultOptions,
   DefaultProgress,
@@ -19,7 +19,7 @@ import { isValidFileExtension } from "./utils.js";
 
 export { DefaultOptions, DefaultProgress, DefaultReport, EventTypes, States };
 
-const supportedFileConversions = ["mp4"];
+const SUPPORT_OUTPUT_FILE_TYPES = [".mp4"];
 export default class M3U8Downloader extends EventEmitter {
   /**
    * M3U8Downloader
@@ -80,7 +80,10 @@ export default class M3U8Downloader extends EventEmitter {
       );
 
       // Parsing m3u8 content
-      const tsUrls = this.parseM3U8(m3u8Content);
+      const tsUrls = await this.parseM3U8(
+        m3u8Content,
+        this.options.m3u8PlaylistIndex
+      );
 
       // Get portion/range of tsUrls we want to download
       const urls = tsUrls.slice(this.options.startIndex, this.options.endIndex);
@@ -98,20 +101,22 @@ export default class M3U8Downloader extends EventEmitter {
 
         // If merged .ts file need to be convert to mp4
         if (this.options.convert2Mp4) {
+          // Make sure output is valid string
           if (this.output) {
-            if (isValidFileExtension(this.output, supportedFileConversions)) {
+            //Make sure output file extension is valid
+            if (isValidFileExtension(this.output, SUPPORT_OUTPUT_FILE_TYPES)) {
               await this.convertToMp4(tsMediaPath);
             } else {
-              fs.unlinkSync(inputFilePath);
+              fs.unlinkSync(tsMediaPath);
               this.emit(
                 EventTypes.Error,
                 new Error(
-                  `Unable to convert to mp4, output ${this.output} is not a valid file types\nSupported file types are: ${supportedFileConversions}`
+                  `Unable to convert to mp4, output ${this.output} is not a valid file types\nSupported file types are: ${SUPPORT_OUTPUT_FILE_TYPES}`
                 )
               );
             }
           } else {
-            fs.unlinkSync(inputFilePath);
+            fs.unlinkSync(tsMediaPath);
             this.emit(
               EventTypes.Error,
               new Error(
@@ -186,18 +191,63 @@ export default class M3U8Downloader extends EventEmitter {
   }
 
   /**
-   * Get .ts urls from m3u8 content
+   * Return .ts urls from the m3u8 content, if the m3u8 content
+   * **do not** contain other m3u8 playlists
    *
-   * @param {string} m3u8Content
+   * If given m3u8 content contain other m3u8 playlists
+   * then it will get the .ts urls from a specific m3u8 playlist
+   * by `playlistIndex`
+   *
+   * @param {string} m3u8Content string in m3u8 format
+   * @param {number} playlistIndex index of m3u8 playlist,
+   * **only use if `m3u8Content` contain other m3u8 playlists**,
+   * index will be fixed to 0 automatically if index is out of m3u8
+   * playlists size,
+   * default 0
    * @returns array of string as url
    */
-  parseM3U8(m3u8Content) {
+  async parseM3U8(m3u8Content, playlistIndex = 0) {
     const parser = new m3u8Parser.Parser();
 
     parser.push(m3u8Content);
     parser.end();
 
     const parsedManifest = parser.manifest;
+
+    // if this m3u8 content contain other playlists,
+    // we will get the specific m3u8 playlist content by index
+    if (parsedManifest?.playlists) {
+      const playlists = parsedManifest.playlists.map((playlist) => {
+        // only combine url with base m3u8 url if playlist's uri
+        // is relative url
+        const url = isUrl(playlist.uri)
+          ? playlist.uri
+          : combineURL(getBaseURL(this.m3u8Url), playlist.uri).href;
+
+        return {
+          url: url,
+          resolution: playlist.attributes["RESOLUTION"],
+          bandwidth: playlist.attributes["BANDWIDTH"],
+          programId: playlist.attributes["PROGRAM-ID"],
+        };
+      });
+
+      // fix playlist index to 0 if it is out of bound
+      if (playlistIndex >= playlists.length) playlistIndex = 0;
+
+      // get the specific m3u8 playlist file
+      const playlist = playlists[playlistIndex];
+
+      // change m3u8 url
+      this.m3u8Url = getBaseURL(playlist.url);
+      const m3u8Content = await this.getM3U8(
+        playlist.url,
+        this.options.headers
+      );
+      return await this.parseM3U8(m3u8Content, playlistIndex);
+    }
+
+    // parsing segments if m3u8 content is a playlist(actual m3u8 that include .ts file uri)
     return (parsedManifest?.segments || []).map((segment) => {
       if (isUrl(segment.uri)) {
         return segment.uri;

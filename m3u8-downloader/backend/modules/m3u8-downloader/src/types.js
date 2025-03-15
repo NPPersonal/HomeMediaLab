@@ -52,6 +52,8 @@ export const DefaultOptions = {
   headers: {},
   /** If true then download/merging/conversion process will stop, otherwise it will continue */
   interruptOnError: false,
+  /** Only use if given m3u8 file is a master file which contain other m3u8 files, default 0 */
+  m3u8PlaylistIndex: 0,
 };
 
 export const EventTypes = {
