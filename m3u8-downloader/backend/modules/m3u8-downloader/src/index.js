@@ -7,20 +7,88 @@ import axiosRetry from "axios-retry";
 import PQueue from "p-queue";
 import * as m3u8Parser from "m3u8-parser";
 import { combineURL, getBaseURL, isUrl } from "./utils.js";
-import {
-  DefaultOptions,
-  DefaultProgress,
-  DefaultReport,
-  EventTypes,
-  States,
-} from "./types.js";
+import { DefaultOptions, DefaultProgress, DefaultReport } from "./types.js";
 import { dateTimeLog } from "./utils.js";
 import { isValidFileExtension } from "./utils.js";
 
-export { DefaultOptions, DefaultProgress, DefaultReport, EventTypes, States };
+export { DefaultOptions, DefaultProgress, DefaultReport };
 
 const SUPPORT_OUTPUT_FILE_TYPES = [".mp4"];
 export default class M3U8Downloader extends EventEmitter {
+  static EventTypes = {
+    /** Listener: () => void */
+    Start: "start",
+    /** Listener: (report) => void
+     * 
+     * @param {DefaultReport} report a report object
+     * ```
+     * {
+      url: m3u8 url,
+      output: conversion output file path,
+      totalSegments: total .ts files need to be downloaded,
+      downloadedSegments: downloaded .ts files,
+      downloadFailedSegments: .ts files that fail to download,
+      eventLogs: event logs,
+      }
+     * ```
+     */
+    Completed: "completed",
+    /** Listener: () => void */
+    Canceled: "canceled",
+    /** Listener: () => void */
+    Pause: "pause",
+    /** Listener: () => void */
+    Resume: "resume",
+    /** Listener: () => void
+     * Beginning merging .ts files
+     */
+    Merging: "merging",
+    /** Listener: (mergedFilePath) => void
+     *
+     * Merge .ts files completed
+     *
+     * @param {*} mergedFilePath path to .ts merged file
+     */
+    Merged: "merged",
+    /** Listener: (inputFilePath) => void
+     *
+     * Beginning converting .ts file
+     * @param {*} inputFilePath path to .ts file that was merged
+     * and will be used as input file for conversion
+     */
+    Converting: "converting",
+    /**
+     * Listener: (outputFilePath) => void
+     *
+     * @param {*} outputFilePath path to output file
+     */
+    Converted: "converted",
+    /**
+       * Listener: (progress) => void
+       * 
+       * @param {DefaultProgress} progress an object
+       * ```
+       * {
+          url: `url to .ts file(segment) as string`,
+          downloadedFile: `path to .ts file as string`,
+          downloaded: `current downloaded file index as number`,
+          total: `total .ts files need to be downloaded as number`,
+        }
+          ```
+       */
+    Progress: "progress",
+    /**
+     * Listener: (error) => void
+     *
+     * @param {*} error Error
+     */
+    Error: "error",
+  };
+
+  static States = Object.assign(this.EventTypes, {
+    Running: "running",
+  });
+
   /**
    * M3U8Downloader
    *
@@ -32,6 +100,10 @@ export default class M3U8Downloader extends EventEmitter {
     super();
     this.options = Object.assign(DefaultOptions, options);
     this.m3u8Url = m3u8Url;
+    // The playlistUrl is used to fetch playlist's segments,
+    // default to m3u8Url but need to be changed when m3u8Url to m3u8 file
+    // contain other playlists
+    this.playlistUrl = this.m3u8Url;
     this.output = output;
     this.segmentsDir = this.options.segmentsDir;
     this.queue = new PQueue({ concurrency: this.options.concurrency });
@@ -53,8 +125,8 @@ export default class M3U8Downloader extends EventEmitter {
   /** Beginning download process */
   async download() {
     try {
-      this.emit(EventTypes.Start);
-      this.status = States.Running;
+      this.emit(M3U8Downloader.EventTypes.Start);
+      this.status = M3U8Downloader.States.Running;
 
       // Make directory for download segments if it doesn't exists
       if (!(await fs.pathExists(this.segmentsDir))) {
@@ -109,7 +181,7 @@ export default class M3U8Downloader extends EventEmitter {
             } else {
               fs.unlinkSync(tsMediaPath);
               this.emit(
-                EventTypes.Error,
+                M3U8Downloader.EventTypes.Error,
                 new Error(
                   `Unable to convert to mp4, output ${this.output} is not a valid file types\nSupported file types are: ${SUPPORT_OUTPUT_FILE_TYPES}`
                 )
@@ -118,7 +190,7 @@ export default class M3U8Downloader extends EventEmitter {
           } else {
             fs.unlinkSync(tsMediaPath);
             this.emit(
-              EventTypes.Error,
+              M3U8Downloader.EventTypes.Error,
               new Error(
                 `Unable to convert to mp4, output ${this.output} was not given`
               )
@@ -131,9 +203,9 @@ export default class M3U8Downloader extends EventEmitter {
         await this.cleanUpDownloadedFiles();
         return;
       }
-      this.emit("completed", this.generateReport());
+      this.emit(M3U8Downloader.EventTypes.Completed, this.generateReport());
     } catch (error) {
-      this.emit(EventTypes.Error, error);
+      this.emit(M3U8Downloader.EventTypes.Error, error);
     }
   }
   /**
@@ -143,8 +215,8 @@ export default class M3U8Downloader extends EventEmitter {
     if (!this.isRunning()) return;
 
     // running in queue will not be paused
-    this.status = States.Pause;
-    this.emit(EventTypes.Pause);
+    this.status = M3U8Downloader.States.Pause;
+    this.emit(M3U8Downloader.EventTypes.Pause);
     this.queue.pause();
   }
 
@@ -152,9 +224,9 @@ export default class M3U8Downloader extends EventEmitter {
    * Resume download
    */
   resume() {
-    if (this.status !== States.Pause) return;
-    this.status = States.Running;
-    this.emit(EventTypes.Resume);
+    if (this.status !== M3U8Downloader.States.Pause) return;
+    this.status = M3U8Downloader.States.Running;
+    this.emit(M3U8Downloader.EventTypes.Resume);
     this.queue.start();
   }
 
@@ -162,11 +234,17 @@ export default class M3U8Downloader extends EventEmitter {
    * Cancel download
    */
   cancel() {
-    if ([States.Completed, States.Canceled, States.Error].includes(this.status))
+    if (
+      [
+        M3U8Downloader.States.Completed,
+        M3U8Downloader.States.Canceled,
+        M3U8Downloader.States.Error,
+      ].includes(this.status)
+    )
       return;
 
-    this.status = States.Canceled;
-    this.emit(EventTypes.Canceled);
+    this.status = M3U8Downloader.States.Canceled;
+    this.emit(M3U8Downloader.EventTypes.Canceled);
     this.queue.clear();
   }
   // #endregion public
@@ -238,8 +316,10 @@ export default class M3U8Downloader extends EventEmitter {
       // get the specific m3u8 playlist file
       const playlist = playlists[playlistIndex];
 
-      // change m3u8 url
-      this.m3u8Url = getBaseURL(playlist.url);
+      // since we selected a playlist then
+      // we need to update playlistUrl to new playlist's url
+      // instead of original m3u8Url
+      this.playlistUrl = playlist.url;
       const m3u8Content = await this.getM3U8(
         playlist.url,
         this.options.headers
@@ -252,7 +332,7 @@ export default class M3U8Downloader extends EventEmitter {
       if (isUrl(segment.uri)) {
         return segment.uri;
       } else {
-        return new URL(segment.uri, this.m3u8Url).href;
+        return new URL(segment.uri, this.playlistUrl).href;
       }
     });
   }
@@ -270,7 +350,7 @@ export default class M3U8Downloader extends EventEmitter {
         .catch((error) => {
           this.downloadFailedSegments++;
           this.emit(
-            EventTypes.Error,
+            M3U8Downloader.EventTypes.Error,
             new Error(
               `Failed to download segment ${index}\nurl: ${tsUrl} \nreason: ${error}\n`
             )
@@ -308,7 +388,7 @@ export default class M3U8Downloader extends EventEmitter {
         downloaded: this.downloadedSegments,
         total: this.totalSegments,
       });
-      this.emit(EventTypes.Progress, progress);
+      this.emit(M3U8Downloader.EventTypes.Progress, progress);
       return progress;
     }
 
@@ -332,7 +412,7 @@ export default class M3U8Downloader extends EventEmitter {
       downloaded: this.downloadedSegments,
       total: this.totalSegments,
     });
-    this.emit(EventTypes.Progress, progress);
+    this.emit(M3U8Downloader.EventTypes.Progress, progress);
 
     return progress;
   }
@@ -357,7 +437,7 @@ export default class M3U8Downloader extends EventEmitter {
     // Create a writable file stream
     const writeStream = fs.createWriteStream(mergedFilePath);
 
-    this.emit(EventTypes.Merging);
+    this.emit(M3U8Downloader.EventTypes.Merging);
 
     for (let index = 0; index < total; index++) {
       if (!this.isRunning()) {
@@ -381,7 +461,7 @@ export default class M3U8Downloader extends EventEmitter {
         if (deleteSource) await fs.unlink(segmentPath); // 删除临时 TS 片段文件
       } catch (error) {
         this.emit(
-          EventTypes.Error,
+          M3U8Downloader.EventTypes.Error,
           new Error(
             `Segment ${index} is missing\nExpected file at path: ${segmentPath}\n${error}\n`
           )
@@ -397,7 +477,7 @@ export default class M3U8Downloader extends EventEmitter {
     }
 
     writeStream.end();
-    this.emit(EventTypes.Merged, mergedFilePath);
+    this.emit(M3U8Downloader.EventTypes.Merged, mergedFilePath);
     return mergedFilePath;
   }
 
@@ -414,7 +494,7 @@ export default class M3U8Downloader extends EventEmitter {
     const outputFilePath = this.output;
 
     return new Promise((resolve, reject) => {
-      this.emit(EventTypes.Converting, inputFilePath);
+      this.emit(M3U8Downloader.EventTypes.Converting, inputFilePath);
 
       // Use ffmpeg to convert merged .ts file into .mp4
       // with command in a child process
@@ -428,19 +508,25 @@ export default class M3U8Downloader extends EventEmitter {
       ]);
 
       ffmpeg.on("error", (error) => {
-        this.emit("error", `Failed to convert to MP4: ${error.message}`);
+        this.emit(
+          M3U8Downloader.EventTypes.Error,
+          `Failed to convert to MP4: ${error.message}`
+        );
         reject(error);
       });
 
       ffmpeg.on("close", (code) => {
         if (code !== 0) {
-          this.emit("error", `FFmpeg process exited with code ${code}`);
+          this.emit(
+            M3U8Downloader.EventTypes.Error,
+            `FFmpeg process exited with code ${code}`
+          );
           reject(new Error(`FFmpeg process exited with code ${code}`));
           return;
         }
         fs.unlinkSync(inputFilePath); // remove merged TS file
         resolve(outputFilePath);
-        this.emit(EventTypes.Converted, outputFilePath);
+        this.emit(M3U8Downloader.EventTypes.Converted, outputFilePath);
       });
     });
   }
@@ -476,9 +562,12 @@ export default class M3U8Downloader extends EventEmitter {
     // return true when encoutner error while downloading
     // otherwise return false
     if (!this.options.interruptOnError) {
-      return this.status === States.Running || this.status === States.Error;
+      return (
+        this.status === M3U8Downloader.States.Running ||
+        this.status === M3U8Downloader.States.Error
+      );
     } else {
-      return this.status === States.Running;
+      return this.status === M3U8Downloader.States.Running;
     }
   }
 
@@ -489,6 +578,7 @@ export default class M3U8Downloader extends EventEmitter {
   generateReport() {
     return Object.assign(DefaultReport, {
       url: this.m3u8Url,
+      segmentsPlaylistUrl: this.playlistUrl,
       output: this.output,
       totalSegments: this.totalSegments,
       downloadedSegments: this.downloadedSegments,
@@ -502,41 +592,41 @@ export default class M3U8Downloader extends EventEmitter {
    * Listen to events and perform relative task
    */
   registerInternalListeners() {
-    this.on(EventTypes.Start, () => {
+    this.on(M3U8Downloader.EventTypes.Start, () => {
       this.eventLogs.push(dateTimeLog("Download started"));
     });
-    this.on(EventTypes.Pause, () => {
+    this.on(M3U8Downloader.EventTypes.Pause, () => {
       this.eventLogs.push(dateTimeLog("Download paused"));
     });
-    this.on(EventTypes.Resume, () => {
+    this.on(M3U8Downloader.EventTypes.Resume, () => {
       this.eventLogs.push(dateTimeLog("Download resumed"));
     });
-    this.on(EventTypes.Merging, () => {
+    this.on(M3U8Downloader.EventTypes.Merging, () => {
       this.eventLogs.push(dateTimeLog("Merging segments"));
     });
-    this.on(EventTypes.Merged, () => {
+    this.on(M3U8Downloader.EventTypes.Merged, () => {
       this.eventLogs.push(dateTimeLog("Merge segements completed"));
     });
-    this.on(EventTypes.Converting, (inputFilePath) => {
+    this.on(M3U8Downloader.EventTypes.Converting, (inputFilePath) => {
       this.eventLogs.push(dateTimeLog(`Converting file ${inputFilePath}`));
     });
-    this.on(EventTypes.Converted, (outputFilePath) => {
+    this.on(M3U8Downloader.EventTypes.Converted, (outputFilePath) => {
       this.eventLogs.push(
         dateTimeLog(`Conversion completed at ${outputFilePath}`)
       );
     });
-    this.on(EventTypes.Canceled, () => {
-      this.status = States.Canceled;
+    this.on(M3U8Downloader.EventTypes.Canceled, () => {
+      this.status = M3U8Downloader.States.Canceled;
       this.eventLogs.push(dateTimeLog("Download canceled"));
       this.cleanUpDownloadedFiles();
     });
-    this.on(EventTypes.Error, async (error) => {
+    this.on(M3U8Downloader.EventTypes.Error, async (error) => {
       console.error(error);
-      this.status = States.Error;
+      this.status = M3U8Downloader.States.Error;
       this.eventLogs.push(dateTimeLog(`Error: ${error.message}`));
     });
-    this.on(EventTypes.Completed, () => {
-      this.status = States.Completed;
+    this.on(M3U8Downloader.EventTypes.Completed, () => {
+      this.status = M3U8Downloader.States.Completed;
       this.eventLogs.push(dateTimeLog("Download completed"));
     });
   }

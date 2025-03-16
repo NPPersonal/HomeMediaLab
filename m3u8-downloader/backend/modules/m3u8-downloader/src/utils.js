@@ -36,7 +36,6 @@ export function dateTimeLog(message) {
  */
 export function isValidFileExtension(filePath, validExtensions = []) {
   const fileExt = path.extname(filePath);
-  console.log(filePath, fileExt);
   return validExtensions.includes(fileExt.toLowerCase());
 }
 

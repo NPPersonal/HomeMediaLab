@@ -1,5 +1,6 @@
 export const DefaultReport = {
   url: "",
+  segmentsPlaylistUrl: "",
   output: "",
   totalSegments: 0,
   downloadedSegments: 0,
@@ -55,77 +56,3 @@ export const DefaultOptions = {
   /** Only use if given m3u8 file is a master file which contain other m3u8 files, default 0 */
   m3u8PlaylistIndex: 0,
 };
-
-export const EventTypes = {
-  /** Listener: () => void */
-  Start: "start",
-  /** Listener: (report) => void
-   * 
-   * @param {DefaultReport} report a report object
-   * ```
-   * {
-    url: m3u8 url,
-    output: conversion output file path,
-    totalSegments: total .ts files need to be downloaded,
-    downloadedSegments: downloaded .ts files,
-    downloadFailedSegments: .ts files that fail to download,
-    eventLogs: event logs,
-    }
-   * ```
-   */
-  Completed: "completed",
-  /** Listener: () => void */
-  Canceled: "canceled",
-  /** Listener: () => void */
-  Pause: "pause",
-  /** Listener: () => void */
-  Resume: "resume",
-  /** Listener: () => void
-   * Beginning merging .ts files
-   */
-  Merging: "merging",
-  /** Listener: (mergedFilePath) => void
-   *
-   * Merge .ts files completed
-   *
-   * @param {*} mergedFilePath path to .ts merged file
-   */
-  Merged: "merged",
-  /** Listener: (inputFilePath) => void
-   *
-   * Beginning converting .ts file
-   * @param {*} inputFilePath path to .ts file that was merged
-   * and will be used as input file for conversion
-   */
-  Converting: "converting",
-  /**
-   * Listener: (outputFilePath) => void
-   *
-   * @param {*} outputFilePath path to output file
-   */
-  Converted: "converted",
-  /**
-     * Listener: (progress) => void
-     * 
-     * @param {DefaultProgress} progress an object
-     * ```
-     * {
-        url: `url to .ts file(segment) as string`,
-        downloadedFile: `path to .ts file as string`,
-        downloaded: `current downloaded file index as number`,
-        total: `total .ts files need to be downloaded as number`,
-      }
-        ```
-     */
-  Progress: "progress",
-  /**
-   * Listener: (error) => void
-   *
-   * @param {*} error Error
-   */
-  Error: "error",
-};
-
-export const States = Object.assign(EventTypes, {
-  Running: "running",
-});

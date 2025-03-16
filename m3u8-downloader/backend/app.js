@@ -18,33 +18,57 @@ const M3U8_MASTER_TEST_URL =
 const M3U8_TEST_URL =
   "https://vip.lz-cdn6.com/20220817/22481_342a8e06/1000k/hls/mixed.m3u8";
 
-import M3U8Downloader, {
-  EventTypes,
-} from "./modules/m3u8-downloader/src/index.js";
+import { M3U8DownloadTask } from "./download-manager/download-task.js";
+
 app.get("/test", (req, res) => {
-  const id = uuidv4();
-  const workingPath = path.join(TEMP_DIR, id);
-  const downloader = new M3U8Downloader(M3U8_TEST_URL, "output/out.mp4", {
-    mergeSegments: true,
-    convert2Mp4: true,
-    clean: true,
-    segmentsDir: workingPath, // the directory to store downloaded segments
-  });
-  tasks.push(downloader);
-  downloader.on(EventTypes.Progress, (progress) => {
-    console.log(
-      `Download progress: ${progress.downloaded}/${progress.total} ${progress.url}`
-    );
+  const downloadTask = new M3U8DownloadTask();
+  downloadTask.init(M3U8_MASTER_TEST_URL, "output/.out.mp4", TEMP_DIR);
+  tasks.push(downloadTask);
+
+  downloadTask.on(M3U8DownloadTask.EventTypes.Begin, (task) => {
+    console.log(`Downloader begin ${task.id}`);
   });
 
-  downloader.on(EventTypes.Completed, (report) => {
-    console.log("Download completed", report);
+  downloadTask.on(M3U8DownloadTask.EventTypes.Progress, (task, progress) => {
+    console.log(`Download task ${task.id} progress`, progress);
   });
 
-  downloader.on(EventTypes.Error, (error) => {
-    console.error("Error occurred:", error);
+  downloadTask.on(M3U8DownloadTask.EventTypes.Error, (task, error) => {
+    console.log(`Download task ${task.id} error`, error);
   });
-  downloader.download();
+
+  downloadTask.on(M3U8DownloadTask.EventTypes.Completed, (task, report) => {
+    console.log(`Download task ${task.id} completed`, report);
+  });
+
+  downloadTask.start();
+  // const id = uuidv4();
+  // const workingPath = path.join(TEMP_DIR, id);
+  // const downloader = new M3U8Downloader(
+  //   M3U8_MASTER_TEST_URL,
+  //   "output/out.mp4",
+  //   {
+  //     mergeSegments: true,
+  //     convert2Mp4: true,
+  //     clean: true,
+  //     segmentsDir: workingPath, // the directory to store downloaded segments
+  //   }
+  // );
+  // tasks.push(downloader);
+  // downloader.on(M3U8Downloader.EventTypes.Progress, (progress) => {
+  //   console.log(
+  //     `Download progress: ${progress.downloaded}/${progress.total} ${progress.url}`
+  //   );
+  // });
+
+  // downloader.on(M3U8Downloader.EventTypes.Completed, (report) => {
+  //   console.log("Download completed", report);
+  // });
+
+  // downloader.on(M3U8Downloader.EventTypes.Error, (error) => {
+  //   console.error("Error occurred:", error);
+  // });
+  // downloader.download();
   res.send("download started");
 });
 
