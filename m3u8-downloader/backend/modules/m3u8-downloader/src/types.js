@@ -6,6 +6,7 @@ export const DefaultReport = {
   downloadedSegments: 0,
   downloadFailedSegments: 0,
   downloadedFiles: [],
+  configs: {},
   eventLogs: [],
 };
 

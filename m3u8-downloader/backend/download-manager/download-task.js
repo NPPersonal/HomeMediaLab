@@ -31,6 +31,24 @@ export class M3U8DownloadTask extends EventEmitter {
         ```
     */
     Progress: "progress",
+
+    /** Listener: (M3U8DownloadTask) => void */
+    MergingFiles: "merging_files",
+    /** Listener: (M3U8DownloadTask, mergedFilePath) => void
+     *
+     * `mergedFilePath`: path to merged file
+     */
+    MerginFilesCompleted: "merging_files_completed",
+    /** Listener: (M3U8DownloadTask, inputFilePath) => void
+     *
+     * `inputFilePath`: path to input file(merged file)
+     */
+    ConvertingVideo: "converting_video",
+    /** Listener: (M3U8DownloadTask, outputFilePath) => void
+     *
+     * `outputFilePath`: path to output file
+     */
+    ConvertingVideoCompleted: "converting_video_completed",
     /** Listener: (M3U8DownloadTask, error) => void
      *
      * `error`: Error
@@ -89,6 +107,11 @@ export class M3U8DownloadTask extends EventEmitter {
     return this.#taskId;
   }
 
+  /**
+   * Start the task asynchronously
+   *
+   * @returns
+   */
   async start() {
     return this.downloader.download();
   }
@@ -111,6 +134,7 @@ export class M3U8DownloadTask extends EventEmitter {
       this.emit(M3U8DownloadTask.EventTypes.Canceled, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Progress, (progress) => {
+      this.status = M3U8DownloadTask.States.Progress;
       const progressFloat = parseFloat(progress.downloaded / progress.total);
       const progressDesc = `${parseInt(progressFloat * 100.0)}%`;
       const progressObj = {
@@ -121,18 +145,33 @@ export class M3U8DownloadTask extends EventEmitter {
       };
       this.emit(M3U8DownloadTask.EventTypes.Progress, this, progressObj);
     });
-    this.downloader.on(M3U8Downloader.EventTypes.Merging, () => {});
-    this.downloader.on(
-      M3U8Downloader.EventTypes.Merged,
-      (mergedFilePath) => {}
-    );
+    this.downloader.on(M3U8Downloader.EventTypes.Merging, () => {
+      this.status = M3U8DownloadTask.States.MergingFiles;
+      this.emit(M3U8DownloadTask.EventTypes.MergingFiles, this);
+    });
+    this.downloader.on(M3U8Downloader.EventTypes.Merged, (mergedFilePath) => {
+      this.status = M3U8DownloadTask.States.MerginFilesCompleted;
+      this.emit(
+        M3U8DownloadTask.EventTypes.MerginFilesCompleted,
+        mergedFilePath
+      );
+    });
     this.downloader.on(
       M3U8Downloader.EventTypes.Converting,
-      (inputFilePath) => {}
+      (inputFilePath) => {
+        this.status = M3U8DownloadTask.States.ConvertingVideo;
+        this.emit(M3U8DownloadTask.EventTypes.ConvertingVideo, inputFilePath);
+      }
     );
     this.downloader.on(
       M3U8Downloader.EventTypes.Converted,
-      (outputFilePath) => {}
+      (outputFilePath) => {
+        this.status = M3U8DownloadTask.States.ConvertingVideoCompleted;
+        this.emit(
+          M3U8DownloadTask.EventTypes.ConvertingVideoCompleted,
+          outputFilePath
+        );
+      }
     );
     this.downloader.on(M3U8Downloader.EventTypes.Error, (error) => {
       this.status = M3U8DownloadTask.States.Error;
@@ -141,19 +180,7 @@ export class M3U8DownloadTask extends EventEmitter {
     this.downloader.on(M3U8Downloader.EventTypes.Completed, (report) => {
       this.status = M3U8DownloadTask.States.Completed;
       let jsonString = JSON.stringify(report, null, 4);
-      //   const configs = JSON.stringify(this.downloader.options, null, 4);
-      //   const logs = JSON.stringify(report.eventLogs, null, 4);
 
-      //   let reportStr = ```
-      //     m3u8 url: ${report.url}
-      //     output file path: ${report.output}
-      //     total files need to be downloaded: ${report.totalSegments}
-      //     successful downloaded files: ${report.downloadedSegments}
-      //     fail downloaded files: ${report.downloadFailedSegments}
-      //     downloader configs: ${configs}
-      //     event logs:
-      //     ${logs}
-      //     ```;
       this.emit(M3U8DownloadTask.EventTypes.Completed, this, jsonString);
     });
   }

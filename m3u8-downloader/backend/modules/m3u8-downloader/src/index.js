@@ -23,12 +23,15 @@ export default class M3U8Downloader extends EventEmitter {
      * @param {DefaultReport} report a report object
      * ```
      * {
-      url: m3u8 url,
+      url: m3u8 url (could be the master m3u8 file),
+      segmentsPlaylistUrl: .m3u8 url to playlist for fetching segments, 
       output: conversion output file path,
-      totalSegments: total .ts files need to be downloaded,
-      downloadedSegments: downloaded .ts files,
-      downloadFailedSegments: .ts files that fail to download,
-      eventLogs: event logs,
+      totalSegments: total number of .ts files suppose to be downloaded,
+      downloadedSegments: total number of downloaded .ts files,
+      downloadFailedSegments: total number of .ts files that fail to download,
+      downloadedFiles: downloaded files location path in array,
+      configs: configuration for downloader,
+      eventLogs: event logs array in string,
       }
      * ```
      */
@@ -584,6 +587,7 @@ export default class M3U8Downloader extends EventEmitter {
       downloadedSegments: this.downloadedSegments,
       downloadFailedSegments: this.downloadFailedSegments,
       downloadedFiles: this.downloadedFiles,
+      configs: this.options,
       eventLogs: this.eventLogs,
     });
   }
