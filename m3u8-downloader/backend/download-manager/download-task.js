@@ -163,7 +163,7 @@ export class M3U8DownloadTask extends DownloadTask {
   }
 
   getCheckPoint() {
-    const checkPoint = Object.assign(super.getCheckPoint(), this.taskConfig);
+    const checkPoint = Object.assign(super.getCheckPoint(), this.checkpoint);
     return checkPoint;
   }
   //#endregion Public overrided methods
@@ -189,10 +189,11 @@ export class M3U8DownloadTask extends DownloadTask {
       segmentsDir: path.join(workingDir, this.taskId),
     });
     this.downloader = new M3U8Downloader(m3u8Url, output, options);
-    this.taskConfig = {
+    this.checkpoint = {
       m3u8Url,
       output,
       workingDir,
+      progress: 0,
       options: this.downloader.options,
     };
     this.registerEventListeners();
@@ -226,9 +227,14 @@ export class M3U8DownloadTask extends DownloadTask {
       this.emit(M3U8DownloadTask.EventTypes.Canceled, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Progress, (progress) => {
-      this.status = M3U8DownloadTask.States.Progress;
       const progressFloat = parseFloat(progress.downloaded / progress.total);
       const progressDesc = `${parseInt(progressFloat * 100.0)}%`;
+
+      this.status = M3U8DownloadTask.States.Progress;
+      this.checkpoint = Object.assign(this.checkpoint, {
+        progress: progressFloat,
+      });
+
       const progressObj = {
         url: progress.url,
         filePath: progress.downloadedFile,

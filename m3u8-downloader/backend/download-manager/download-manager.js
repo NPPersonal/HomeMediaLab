@@ -50,10 +50,9 @@ export default class DownloadManager {
    * Add a new task to manager's task queue
    *
    * @param {M3U8DownloadTask} task
-   * @param {boolean} autoStart true to start task automatically default false
    * @returns M3U8DownloadTask or undeinfed
    */
-  addTask(task, autoStart = false) {
+  addTask(task) {
     const foundTask = this.findTaskById(task.taskId);
     if (foundTask) {
       console.error(
@@ -64,7 +63,6 @@ export default class DownloadManager {
 
     this.registerListenerToTask(task);
     this.#taskQueue.push(task);
-    if (autoStart) task.start();
 
     return task;
   }

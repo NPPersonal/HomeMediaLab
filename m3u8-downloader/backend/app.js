@@ -22,12 +22,9 @@ import { M3U8DownloadTask } from "./download-manager/download-task.js";
 import DownloadManager from "./download-manager/download-manager.js";
 
 app.get("/test", (req, res) => {
-  const downloadTask = new M3U8DownloadTask().init(
-    M3U8_MASTER_TEST_URL,
-    "output/.out.mp4",
-    TEMP_DIR
-  );
-  DownloadManager.manager.addTask(downloadTask, true);
+  const task = DownloadManager.manager.addTask(new M3U8DownloadTask());
+  task.init(M3U8_MASTER_TEST_URL, "output/.out.mp4", TEMP_DIR);
+  task.start();
   res.send("download started");
 });
 
