@@ -32,6 +32,21 @@ export class DownloadTask extends EventEmitter {
   async start() {}
 
   /**
+   * Pause the task
+   */
+  async pause() {}
+
+  /**
+   * Resume the task
+   */
+  async resume() {}
+
+  /**
+   * Cancel the task
+   */
+  async cancel() {}
+
+  /**
    * Get checkpoint data for this task
    * @returns an object
    */
@@ -133,6 +148,18 @@ export class M3U8DownloadTask extends DownloadTask {
   //#region Public overrided methods
   async start() {
     this.downloader.download();
+  }
+
+  async pause() {
+    this.downloader.pause();
+  }
+
+  async resume() {
+    this.downloader.resume();
+  }
+
+  async cancel() {
+    this.downloader.cancel();
   }
 
   getCheckPoint() {
