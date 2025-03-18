@@ -45,27 +45,32 @@ export default class M3U8Downloader extends EventEmitter {
     /** Listener: () => void
      * Beginning merging .ts files
      */
-    Merging: "merging",
+    BeginMerge: "begin_merge",
+    /**
+     * Listener: (filePath) => void
+     * When a segment has been merged
+     */
+    SegmentMerged: "segment_merged",
     /** Listener: (mergedFilePath) => void
      *
      * Merge .ts files completed
      *
      * @param {*} mergedFilePath path to .ts merged file
      */
-    Merged: "merged",
+    MergeCompleted: "merge_completed",
     /** Listener: (inputFilePath) => void
      *
      * Beginning converting .ts file
      * @param {*} inputFilePath path to .ts file that was merged
      * and will be used as input file for conversion
      */
-    Converting: "converting",
+    BeginConversion: "begin_conversion",
     /**
      * Listener: (outputFilePath) => void
      *
      * @param {*} outputFilePath path to output file
      */
-    Converted: "converted",
+    ConversionCompleted: "conversion_completed",
     /**
        * Listener: (progress) => void
        * 
@@ -440,7 +445,7 @@ export default class M3U8Downloader extends EventEmitter {
     // Create a writable file stream
     const writeStream = fs.createWriteStream(mergedFilePath);
 
-    this.emit(M3U8Downloader.EventTypes.Merging);
+    this.emit(M3U8Downloader.EventTypes.BeginMerge);
 
     for (let index = 0; index < total; index++) {
       if (!this.isRunning()) {
@@ -459,6 +464,8 @@ export default class M3U8Downloader extends EventEmitter {
       try {
         const segmentData = await fs.readFile(segmentPath);
         writeStream.write(segmentData);
+
+        this.emit(M3U8Downloader.EventTypes.SegmentMerged, segmentPath);
 
         // Whether to delete .ts source file after merged or not
         if (deleteSource) await fs.unlink(segmentPath); // 删除临时 TS 片段文件
@@ -480,7 +487,7 @@ export default class M3U8Downloader extends EventEmitter {
     }
 
     writeStream.end();
-    this.emit(M3U8Downloader.EventTypes.Merged, mergedFilePath);
+    this.emit(M3U8Downloader.EventTypes.MergeCompleted, mergedFilePath);
     return mergedFilePath;
   }
 
@@ -497,7 +504,7 @@ export default class M3U8Downloader extends EventEmitter {
     const outputFilePath = this.output;
 
     return new Promise((resolve, reject) => {
-      this.emit(M3U8Downloader.EventTypes.Converting, inputFilePath);
+      this.emit(M3U8Downloader.EventTypes.BeginConversion, inputFilePath);
 
       // Use ffmpeg to convert merged .ts file into .mp4
       // with command in a child process
@@ -529,7 +536,10 @@ export default class M3U8Downloader extends EventEmitter {
         }
         fs.unlinkSync(inputFilePath); // remove merged TS file
         resolve(outputFilePath);
-        this.emit(M3U8Downloader.EventTypes.Converted, outputFilePath);
+        this.emit(
+          M3U8Downloader.EventTypes.ConversionCompleted,
+          outputFilePath
+        );
       });
     });
   }
@@ -605,18 +615,20 @@ export default class M3U8Downloader extends EventEmitter {
     this.on(M3U8Downloader.EventTypes.Resume, () => {
       this.eventLogs.push(dateTimeLog("Download resumed"));
     });
-    this.on(M3U8Downloader.EventTypes.Merging, () => {
-      this.eventLogs.push(dateTimeLog("Merging segments"));
+    this.on(M3U8Downloader.EventTypes.BeginMerge, () => {
+      this.eventLogs.push(dateTimeLog("Begin merging segments"));
     });
-    this.on(M3U8Downloader.EventTypes.Merged, () => {
+    this.on(M3U8Downloader.EventTypes.MergeCompleted, () => {
       this.eventLogs.push(dateTimeLog("Merge segements completed"));
     });
-    this.on(M3U8Downloader.EventTypes.Converting, (inputFilePath) => {
-      this.eventLogs.push(dateTimeLog(`Converting file ${inputFilePath}`));
-    });
-    this.on(M3U8Downloader.EventTypes.Converted, (outputFilePath) => {
+    this.on(M3U8Downloader.EventTypes.BeginConversion, (inputFilePath) => {
       this.eventLogs.push(
-        dateTimeLog(`Conversion completed at ${outputFilePath}`)
+        dateTimeLog(`Begin converting video file ${inputFilePath}`)
+      );
+    });
+    this.on(M3U8Downloader.EventTypes.ConversionCompleted, (outputFilePath) => {
+      this.eventLogs.push(
+        dateTimeLog(`Converting video file completed at ${outputFilePath}`)
       );
     });
     this.on(M3U8Downloader.EventTypes.Canceled, () => {

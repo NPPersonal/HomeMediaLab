@@ -39,7 +39,7 @@ export default class DownloadManager {
    * @param {string} taskId task's id to match
    * @returns a download task otherwise undefined
    */
-  findTaskById(taskId) {
+  findTaskBy(taskId) {
     const task = this.#taskQueue.find((task) => {
       return task.taskId === taskId;
     });
@@ -53,7 +53,7 @@ export default class DownloadManager {
    * @returns M3U8DownloadTask or undeinfed
    */
   addTask(task) {
-    const foundTask = this.findTaskById(task.taskId);
+    const foundTask = this.findTaskBy(task.taskId);
     if (foundTask) {
       console.error(
         `Unable to add task to queue task id ${task.taskId} already exists`
@@ -72,8 +72,8 @@ export default class DownloadManager {
    *
    * @param {string} taskId task's id to match
    */
-  removeTaskById(taskId) {
-    const foundTask = this.findTaskById(taskId);
+  removeTaskBy(taskId) {
+    const foundTask = this.findTaskBy(taskId);
     if (foundTask) {
       const taskIndex = this.#taskQueue.indexOf(foundTask);
       if (taskIndex > -1) this.#taskQueue.splice(taskIndex, 1);
@@ -93,13 +93,29 @@ export default class DownloadManager {
       // console.log(`Download task ${task.taskId} progress`, progress);
     });
 
+    downloadTask.on(M3U8DownloadTask.EventTypes.Pause, (task) => {
+      console.log(`Download task ${task.taskId} paused`);
+    });
+
+    downloadTask.on(M3U8DownloadTask.EventTypes.Resume, (task) => {
+      console.log(`Download task ${task.taskId} resumed`);
+    });
+
+    downloadTask.on(M3U8DownloadTask.EventTypes.Canceled, (task) => {
+      console.log(`Download task ${task.taskId} canceled`);
+    });
+
     downloadTask.on(M3U8DownloadTask.EventTypes.Error, (task, error) => {
       console.log(`Download task ${task.taskId} error`, error);
     });
 
+    downloadTask.on(M3U8DownloadTask.EventTypes.MergingFiles, (task) => {
+      console.log(`Download task ${task.taskId} begin merging video segments`);
+    });
+
     downloadTask.on(M3U8DownloadTask.EventTypes.Completed, (task, report) => {
       console.log(`Download task ${task.taskId} completed`);
-      this.removeTaskById(task.taskId);
+      this.removeTaskBy(task.taskId);
     });
   }
 }

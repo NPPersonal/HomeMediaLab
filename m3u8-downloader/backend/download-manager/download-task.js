@@ -47,10 +47,10 @@ export class DownloadTask extends EventEmitter {
   async cancel() {}
 
   /**
-   * Get checkpoint data for this task
-   * @returns an object
+   * Get json object of this task
+   * @returns a JSON object
    */
-  getCheckPoint() {
+  toJson() {
     return { id: this.#taskId };
   }
 }
@@ -162,7 +162,7 @@ export class M3U8DownloadTask extends DownloadTask {
     this.downloader.cancel();
   }
 
-  getCheckPoint() {
+  toJson() {
     const checkPoint = Object.assign(super.getCheckPoint(), this.checkpoint);
     return checkPoint;
   }
@@ -243,26 +243,29 @@ export class M3U8DownloadTask extends DownloadTask {
       };
       this.emit(M3U8DownloadTask.EventTypes.Progress, this, progressObj);
     });
-    this.downloader.on(M3U8Downloader.EventTypes.Merging, () => {
+    this.downloader.on(M3U8Downloader.EventTypes.BeginMerge, () => {
       this.status = M3U8DownloadTask.States.MergingFiles;
       this.emit(M3U8DownloadTask.EventTypes.MergingFiles, this);
     });
-    this.downloader.on(M3U8Downloader.EventTypes.Merged, (mergedFilePath) => {
-      this.status = M3U8DownloadTask.States.MerginFilesCompleted;
-      this.emit(
-        M3U8DownloadTask.EventTypes.MerginFilesCompleted,
-        mergedFilePath
-      );
-    });
     this.downloader.on(
-      M3U8Downloader.EventTypes.Converting,
+      M3U8Downloader.EventTypes.MergeCompleted,
+      (mergedFilePath) => {
+        this.status = M3U8DownloadTask.States.MerginFilesCompleted;
+        this.emit(
+          M3U8DownloadTask.EventTypes.MerginFilesCompleted,
+          mergedFilePath
+        );
+      }
+    );
+    this.downloader.on(
+      M3U8Downloader.EventTypes.BeginConversion,
       (inputFilePath) => {
         this.status = M3U8DownloadTask.States.ConvertingVideo;
         this.emit(M3U8DownloadTask.EventTypes.ConvertingVideo, inputFilePath);
       }
     );
     this.downloader.on(
-      M3U8Downloader.EventTypes.Converted,
+      M3U8Downloader.EventTypes.ConversionCompleted,
       (outputFilePath) => {
         this.status = M3U8DownloadTask.States.ConvertingVideoCompleted;
         this.emit(
