@@ -51,7 +51,7 @@ export class DownloadTask extends EventEmitter {
    * @returns a JSON object
    */
   toJson() {
-    return { id: this.#taskId };
+    return { taskId: this.#taskId };
   }
 }
 
@@ -128,7 +128,97 @@ export class M3U8DownloadTask extends DownloadTask {
   get isRunning() {
     return this.#isRunning;
   }
+
+  /**
+   * Getter
+   *
+   * @return status
+   */
+  get status() {
+    return this._status;
+  }
+
+  /**
+   * Getter
+   *
+   * @return checkpoint as Object
+   */
+  get checkpoint() {
+    return this._checkpoint ? this._checkpoint : {};
+  }
   //#endregion Getter
+
+  //#region Setter
+  /**
+   * Setter
+   *
+   * Merge checkpoint with given checkpoint object
+   *
+   * @param {Object} newCheckpoint an Object
+   */
+  set checkpoint(newCheckpoint) {
+    if (newCheckpoint.constructor.name !== "Object") {
+      throw new Error(
+        "Fail to set task's checkpoint, checkpoint value must be an Object"
+      );
+    }
+
+    if (newCheckpoint)
+      this._checkpoint = Object.assign(this.checkpoint, newCheckpoint);
+  }
+  /**
+   * Setter for status
+   *
+   * Also save status to checkpoint
+   *
+   * @param {string} newStatus
+   */
+  set status(newStatus) {
+    this._status = newStatus;
+    this.checkpoint = Object.assign(this.checkpoint, {
+      status: this.status,
+    });
+  }
+
+  /**
+   * Setter for progress
+   *
+   * Save progress to checkpoint
+   *
+   * @param {number} newProgress
+   */
+  set progress(newProgress) {
+    this.checkpoint = Object.assign(this.checkpoint, {
+      progress: newProgress,
+    });
+  }
+
+  /**
+   * Setter
+   *
+   * Save a number of total downloaded files to checkpoint
+   *
+   * @param {number} num
+   */
+  set downloaded(num) {
+    this.checkpoint = Object.assign(this.checkpoint, {
+      downloaded: num,
+    });
+  }
+
+  /**
+   * Setter
+   *
+   * Save a number of total download failed fiels to checkpoint
+   *
+   * @param {number} num
+   */
+  set downloadFailed(num) {
+    this.checkpoint = Object.assign(this.checkpoint, {
+      downloadFailed: num,
+    });
+  }
+  //#endregion Setter
 
   //#region Constructor
   /**
@@ -147,7 +237,7 @@ export class M3U8DownloadTask extends DownloadTask {
 
   //#region Public overrided methods
   async start() {
-    this.downloader.download();
+    if (!this.#isRunning) this.downloader.download();
   }
 
   async pause() {
@@ -163,7 +253,7 @@ export class M3U8DownloadTask extends DownloadTask {
   }
 
   toJson() {
-    const checkPoint = Object.assign(super.getCheckPoint(), this.checkpoint);
+    const checkPoint = Object.assign(super.toJson(), this.checkpoint);
     return checkPoint;
   }
   //#endregion Public overrided methods
@@ -182,14 +272,15 @@ export class M3U8DownloadTask extends DownloadTask {
    * @param {DefaultOptions} options options will passed to M3U8Downloader
    */
   init(m3u8Url, output, workingDir, options = { convert2Mp4: true }) {
-    this.status = M3U8DownloadTask.States.INIT;
-    this.emit(M3U8DownloadTask.EventTypes.INIT);
+    this.status = M3U8DownloadTask.States.Init;
+    this.emit(M3U8DownloadTask.EventTypes.Init);
 
     options = Object.assign(options, {
       segmentsDir: path.join(workingDir, this.taskId),
     });
     this.downloader = new M3U8Downloader(m3u8Url, output, options);
     this.checkpoint = {
+      status: this.status,
       m3u8Url,
       output,
       workingDir,
@@ -202,6 +293,7 @@ export class M3U8DownloadTask extends DownloadTask {
 
     return this;
   }
+
   //#endregion Public methods
 
   //#region Private methods
@@ -231,9 +323,8 @@ export class M3U8DownloadTask extends DownloadTask {
       const progressDesc = `${parseInt(progressFloat * 100.0)}%`;
 
       this.status = M3U8DownloadTask.States.Progress;
-      this.checkpoint = Object.assign(this.checkpoint, {
-        progress: progressFloat,
-      });
+      this.progress = progressFloat;
+      this.downloaded = this.downloader.downloadedSegments;
 
       const progressObj = {
         url: progress.url,
@@ -253,6 +344,7 @@ export class M3U8DownloadTask extends DownloadTask {
         this.status = M3U8DownloadTask.States.MerginFilesCompleted;
         this.emit(
           M3U8DownloadTask.EventTypes.MerginFilesCompleted,
+          this,
           mergedFilePath
         );
       }
@@ -261,7 +353,11 @@ export class M3U8DownloadTask extends DownloadTask {
       M3U8Downloader.EventTypes.BeginConversion,
       (inputFilePath) => {
         this.status = M3U8DownloadTask.States.ConvertingVideo;
-        this.emit(M3U8DownloadTask.EventTypes.ConvertingVideo, inputFilePath);
+        this.emit(
+          M3U8DownloadTask.EventTypes.ConvertingVideo,
+          this,
+          inputFilePath
+        );
       }
     );
     this.downloader.on(
@@ -270,17 +366,22 @@ export class M3U8DownloadTask extends DownloadTask {
         this.status = M3U8DownloadTask.States.ConvertingVideoCompleted;
         this.emit(
           M3U8DownloadTask.EventTypes.ConvertingVideoCompleted,
+          this,
           outputFilePath
         );
       }
     );
     this.downloader.on(M3U8Downloader.EventTypes.Error, (error) => {
       this.status = M3U8DownloadTask.States.Error;
+      this.downloadFailed = this.downloader.downloadFailedSegments;
       this.emit(M3U8DownloadTask.EventTypes.Error, this, error);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Completed, (report) => {
       this.status = M3U8DownloadTask.States.Completed;
       this.#isRunning = false;
+      if (!this.downloader.options.interruptOnError) {
+        this.progress = 1.0;
+      }
       let jsonString = JSON.stringify(report, null, 4);
 
       this.emit(M3U8DownloadTask.EventTypes.Completed, this, jsonString);
