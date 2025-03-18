@@ -12,17 +12,21 @@ export default class DownloadManager {
     canceled: [],
   });
 
-  get taskCheckpoint() {
-    return this.#taskCheckpoint;
-  }
-
+  /**
+   * Return the single instance of manager
+   */
   static get manager() {
     if (DownloadManager.#_instance) return DownloadManager.#_instance;
     DownloadManager.#_instance = new DownloadManager().init();
     return DownloadManager.#_instance;
   }
 
+  /**
+   * Create an instance of manager
+   *
+   */
   constructor() {
+    // load checkpoint json file
     if (fs.pathExistsSync(DATA_FILE_PATH)) {
       this.#taskCheckpoint = Observable.from(fs.readJsonSync(DATA_FILE_PATH));
     } else {
@@ -30,7 +34,14 @@ export default class DownloadManager {
     }
   }
 
+  /**
+   * Initialize the manager
+   *
+   * @returns manager instance
+   */
   init() {
+    // observe task checkpoint data change and write
+    // data to json file
     Observable.observe(this.#taskCheckpoint, (changes) => {
       try {
         fs.writeJsonSync(DATA_FILE_PATH, this.#taskCheckpoint);
@@ -50,6 +61,11 @@ export default class DownloadManager {
     return this;
   }
 
+  /**
+   * Start a specific task
+   *
+   * @param {string} taskId
+   */
   startTaskBy(taskId) {
     const foundTask = this.findTaskBy(taskId);
     if (foundTask) {
@@ -57,6 +73,11 @@ export default class DownloadManager {
     }
   }
 
+  /**
+   * Pause a specific task
+   *
+   * @param {string} taskId
+   */
   pauseTaskBy(taskId) {
     const foundTask = this.findTaskBy(taskId);
     if (foundTask) {
@@ -64,6 +85,11 @@ export default class DownloadManager {
     }
   }
 
+  /**
+   * Resume a specific task
+   *
+   * @param {string} taskId
+   */
   resumeTaskBy(taskId) {
     const foundTask = this.findTaskBy(taskId);
     if (foundTask) {
@@ -71,6 +97,11 @@ export default class DownloadManager {
     }
   }
 
+  /**
+   * Cancel a specific task
+   *
+   * @param {string} taskId
+   */
   cancelTaskBy(taskId) {
     const foundTask = this.findTaskBy(taskId);
     if (foundTask) {
@@ -91,6 +122,13 @@ export default class DownloadManager {
     return task;
   }
 
+  /**
+   * Find a checkpoint
+   *
+   * @param {string} taskId
+   * @param {string} inProp queued, completed, canceled
+   * @returns checkpoint as an Object
+   */
   findTaskCheckpointBy(taskId, inProp) {
     const foundCheckpoint = this.#taskCheckpoint[inProp].find((checkpoint) => {
       return checkpoint.taskId === taskId;
@@ -98,6 +136,15 @@ export default class DownloadManager {
     return foundCheckpoint;
   }
 
+  /**
+   * Add a task to manager's queue
+   *
+   * **Make sure the task is initialized
+   * before add it to the manager**
+   *
+   * @param {M3U8DownloadTask} task
+   * @returns M3U8DownloadTask or undefined
+   */
   queueAddTask(task) {
     // add task to task queue
     const foundTask = this.findTaskBy(task.taskId);
@@ -123,6 +170,12 @@ export default class DownloadManager {
     return task;
   }
 
+  /**
+   * Move a task to completed queue
+   *
+   * @param {M3U8DownloadTask} task
+   * @returns
+   */
   queueMoveTaskToCompleted(task) {
     // remove from task queue
     const taskIndex = this.#taskQueue.indexOf(task);
@@ -152,6 +205,12 @@ export default class DownloadManager {
     this.#taskCheckpoint.completed.unshift(taskCheckpoint);
   }
 
+  /**
+   * Move task to canceld queue
+   *
+   * @param {M3U8DownloadTask} task
+   * @returns
+   */
   queueMoveTaskToCanceled(task) {
     // remove from task queue
     const taskIndex = this.#taskQueue.indexOf(task);
@@ -179,6 +238,12 @@ export default class DownloadManager {
     this.#taskCheckpoint.canceled.unshift(taskCheckpoint);
   }
 
+  /**
+   * Update a task
+   *
+   * @param {M3U8DownloadTask} task
+   * @returns
+   */
   queueTaskUpdated(task) {
     const foundCheckpoint = this.findTaskCheckpointBy(task.taskId, "queued");
     if (!foundCheckpoint) {
