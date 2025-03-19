@@ -58,11 +58,15 @@ Server side have a module `m3u8-downloader` which is written in ES6 javascript a
 > - Report detail after downloader completed
 > - Able to differentiate master m3u8 file or m3u8 playlist, where master m3u8 file contain 1 to many urls reference to
 >   other m3u8 playlist file
+> - Add M3U8 download task to wrap around m3u8 downloader
+> - Add Download manager managing multiple m3u8 download tasks
+> - Store task's checkpoint to disk as json file and recover tasks from checkpoint
 
-### Implementatoin change:
+### M3U8Downloader implementatoin change:
 
 > - ES6 javascript instead of typescript(original implementation)
 > - Using [eventemitter3](https://www.npmjs.com/package/eventemitter3) for events emitting and handling
+> - More events
 
 ### Usage
 

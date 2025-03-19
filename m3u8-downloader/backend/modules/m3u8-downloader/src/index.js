@@ -14,7 +14,25 @@ import { isValidFileExtension } from "./utils.js";
 export { DefaultOptions, DefaultProgress, DefaultReport };
 
 const SUPPORT_OUTPUT_FILE_TYPES = [".mp4"];
+
+/**
+ * M3U8Downloader implementation is base on https://github.com/renmu123/m3u8-downloader
+ * and improve on it.
+ *
+ * This class responsible for:
+ * - Downloading video segments from .m3u8 files
+ * - Merging video segments into single video file
+ * - Converting video to `.mp4` vide file
+ * - Manage downloader's state
+ * - Emitting events
+ *
+ * Usage:
+ * Create a `M3U8Downloader` instance and provide it with requried arguments
+ *
+ *
+ */
 export default class M3U8Downloader extends EventEmitter {
+  //#region Class event types
   static EventTypes = {
     /** Listener: () => void */
     Start: "start",
@@ -92,11 +110,15 @@ export default class M3U8Downloader extends EventEmitter {
      */
     Error: "error",
   };
+  //#endregion Class event types
 
+  //#region Class states
   static States = Object.assign(this.EventTypes, {
     Running: "running",
   });
+  //#endregion Class states
 
+  //#region Constructor
   /**
    * M3U8Downloader
    *
@@ -128,6 +150,7 @@ export default class M3U8Downloader extends EventEmitter {
     });
     this.registerInternalListeners();
   }
+  //#endregion Constructor
 
   // #region public
   /** Beginning download process */

@@ -4,10 +4,26 @@ import path from "node:path";
 import M3U8Downloader from "../modules/m3u8-downloader/src/index.js";
 import { DefaultOptions } from "../modules/m3u8-downloader/src/types.js";
 
+/**
+ * Generic Download task to be inherited
+ *
+ * This class responsible for:
+ * - Generate uuid for the task
+ * - State that is running or not
+ * - Provide task interface entry points for
+ * `start`, `pause`, `resume`, `cancel` which subclas need to override
+ * - Transforming the task to json object.
+ */
 export class DownloadTask extends EventEmitter {
+  //#region Private fields
   /** Private field of task id */
   #taskId;
 
+  /** Private indicate this task is running or not */
+  #isRunning = false;
+  //#endregion Private fields
+
+  //#region Getter
   /**
    * Return this task's id
    */
@@ -15,6 +31,24 @@ export class DownloadTask extends EventEmitter {
     return this.#taskId;
   }
 
+  /**
+   * Return true if task is running otherwise false
+   */
+  get isRunning() {
+    return this.#isRunning;
+  }
+  //#endregion Getter
+
+  //#region Setter
+  /**
+   * Is this task running
+   */
+  set isRunning(value) {
+    this.#isRunning = value;
+  }
+  //#endregion Setter
+
+  //#region Constructor
   constructor(taskId = undefined) {
     super();
     if (!taskId) {
@@ -23,7 +57,9 @@ export class DownloadTask extends EventEmitter {
       this.#taskId = taskId;
     }
   }
+  //#endregion Constructor
 
+  //#region Public methods
   /**
    * Start the task asynchronously
    *
@@ -51,12 +87,30 @@ export class DownloadTask extends EventEmitter {
    * @returns a JSON object
    */
   toJson() {
-    return { taskId: this.#taskId };
+    return { taskId: this.#taskId, isRunning: this.#isRunning };
   }
+  //#endregion Public methods
 }
 
+/**
+ * M3U8DownloadTask is inherited from `DownloadTask` class.
+ * M3U8DownloadTask is also a wrapper for `M3U8Downloader`
+ * which responsible for downloading video segments from .m3u8 file.
+ *
+ * This task responsible for:
+ * - Create an instance of `M3U8Downloader`
+ * - Listening to `M3U8Downloader` events and handling events
+ * - Emitting events
+ * - Provide interface for controlling `M3U8Downloader`
+ * - Manage task state
+ *
+ * Usage:
+ *
+ * Create an instance of `M3U8DownloadTask` then
+ * call `init()` on the instance and provide requiried arguments
+ */
 export class M3U8DownloadTask extends DownloadTask {
-  //#region Public fields
+  //#region Class event types
   static EventTypes = {
     /** Listener: (M3U8DownloadTask) => void */
     Init: "init",
@@ -112,25 +166,17 @@ export class M3U8DownloadTask extends DownloadTask {
      */
     Completed: "completed",
   };
-  static States = Object.assign(this.EventTypes, {});
-  //#endregion Public fields
+  //#endregion Class event types
 
-  //#region Private fields
-  /** Private indicate this task is running or not */
-  #isRunning = false;
-  //#endregion Private fields
+  //#region Class states
+  static States = Object.assign(this.EventTypes, {});
+  //#endregion Class states
 
   //#region Getter
-
-  /**
-   * Return true if task is running otherwise false
-   */
-  get isRunning() {
-    return this.#isRunning;
-  }
-
   /**
    * Getter
+   *
+   * Get task status
    *
    * @return status
    */
@@ -140,6 +186,8 @@ export class M3U8DownloadTask extends DownloadTask {
 
   /**
    * Getter
+   *
+   * Get task cehckpoint
    *
    * @return checkpoint as Object
    */
@@ -237,7 +285,7 @@ export class M3U8DownloadTask extends DownloadTask {
 
   //#region Public overrided methods
   async start() {
-    if (!this.#isRunning) this.downloader.download();
+    if (!this.isRunning) this.downloader.download();
   }
 
   async pause() {
@@ -300,22 +348,22 @@ export class M3U8DownloadTask extends DownloadTask {
   registerEventListeners() {
     this.downloader.on(M3U8Downloader.EventTypes.Start, () => {
       this.status = M3U8DownloadTask.States.Begin;
-      this.#isRunning = true;
+      this.isRunning = true;
       this.emit(M3U8DownloadTask.EventTypes.Begin, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Pause, () => {
       this.status = M3U8DownloadTask.States.Pause;
-      this.#isRunning = false;
+      this.isRunning = false;
       this.emit(M3U8DownloadTask.EventTypes.Pause, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Resume, () => {
       this.status = M3U8DownloadTask.States.Resume;
-      this.#isRunning = true;
+      this.isRunning = true;
       this.emit(M3U8DownloadTask.EventTypes.Resume, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Canceled, () => {
       this.status = M3U8DownloadTask.States.Canceled;
-      this.#isRunning = false;
+      this.isRunning = false;
       this.emit(M3U8DownloadTask.EventTypes.Canceled, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Progress, (progress) => {
@@ -378,7 +426,7 @@ export class M3U8DownloadTask extends DownloadTask {
     });
     this.downloader.on(M3U8Downloader.EventTypes.Completed, (report) => {
       this.status = M3U8DownloadTask.States.Completed;
-      this.#isRunning = false;
+      this.isRunning = false;
       if (!this.downloader.options.interruptOnError) {
         this.progress = 1.0;
       }
