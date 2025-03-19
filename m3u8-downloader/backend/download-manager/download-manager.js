@@ -115,14 +115,14 @@ export default class DownloadManager {
       try {
         fs.writeJsonSync(DATA_FILE_PATH, this.#taskCheckpoint);
 
-        changes.forEach((change) => {
-          console.log(
-            `write to json file ${change.type}`,
-            change.type === "insert" || change.type === "update"
-              ? change.value.progress
-              : 0
-          );
-        });
+        // changes.forEach((change) => {
+        //   console.log(
+        //     `write to json file ${change.type}`,
+        //     change.type === "insert" || change.type === "update"
+        //       ? change.value.progress
+        //       : 0
+        //   );
+        // });
       } catch (error) {
         console.error(`Fail to write to json file ${error}`);
       }
