@@ -4,6 +4,7 @@ import { M3U8DownloadTask } from "./download-task.js";
 
 const DATA_FILE_PATH = "task-checkpoints.json";
 
+const CheckPointQueueNames = ["queued", "completed", "canceled"];
 const DefaultCheckpoint = {
   queued: [],
   completed: [],
@@ -184,7 +185,24 @@ export default class DownloadManager {
    * @param {M3U8DownloadTask} task
    */
   addTask(task) {
-    this.queueAddTask(task);
+    return this.queueAddTask(task);
+  }
+
+  /**
+   * Remove a task checkpoint from canceled queue
+   * @param {string} taskId
+   */
+  removeTaskFromCanceled(taskId) {
+    this.queueRemoveTaskFromCanceledBy(taskId);
+  }
+
+  /**
+   * Remove task checkpoint from completed queue
+   *
+   * @param {string} taskId
+   */
+  removeTaskFromCompleted(taskId) {
+    this.queueRemoveTaskFromCompletedBy(taskId);
   }
   //#endregion Public methods
 
@@ -206,11 +224,16 @@ export default class DownloadManager {
    * Find a checkpoint
    *
    * @param {string} taskId
-   * @param {string} inProp queued, completed, canceled
+   * @param {string} inQueue name of queue `queued`, `completed`, `canceled`
    * @returns checkpoint as an Object
    */
-  findTaskCheckpointBy(taskId, inProp) {
-    const foundCheckpoint = this.#taskCheckpoint[inProp].find((checkpoint) => {
+  findTaskCheckpointBy(taskId, inQueue) {
+    if (!CheckPointQueueNames.includes(inQueue))
+      throw new Error(
+        `inQueue name: ${inQueue} is not matched in ${CheckPointQueueNames}`
+      );
+
+    const foundCheckpoint = this.#taskCheckpoint[inQueue].find((checkpoint) => {
       return checkpoint.taskId === taskId;
     });
     return foundCheckpoint;
@@ -339,6 +362,44 @@ export default class DownloadManager {
 
     // remove old checkpoint and insert new checkpoint
     this.#taskCheckpoint.queued.splice(checkpointIndex, 1, taskCheckpoint);
+  }
+
+  /**
+   * Remove task checkpoint from canceled
+   *
+   * @param {string} taskId
+   * @returns
+   */
+  queueRemoveTaskFromCanceledBy(taskId) {
+    const foundCheckpoint = this.findTaskCheckpointBy(taskId, "canceled");
+    if (!foundCheckpoint) {
+      console.warn(`Unable to fond task ${taskId} from canceled checkpoint`);
+      return;
+    }
+
+    //remove task checkpoint from canceled
+    const checkpointIndex =
+      this.#taskCheckpoint.canceled.indexOf(foundCheckpoint);
+    this.#taskCheckpoint.canceled.splice(checkpointIndex, 1);
+  }
+
+  /**
+   * Remove task checkpoint from completed
+   *
+   * @param {string} taskId
+   * @returns
+   */
+  queueRemoveTaskFromCompletedBy(taskId) {
+    const foundCheckpoint = this.findTaskCheckpointBy(taskId, "completed");
+    if (!foundCheckpoint) {
+      console.warn(`Unable to find task ${taskId} from completed checkpoint`);
+      return;
+    }
+
+    //remove task checkpoint from completed
+    const checkpointIndex =
+      this.#taskCheckpoint.completed.indexOf(foundCheckpoint);
+    this.#taskCheckpoint.completed.splice(checkpointIndex, 1);
   }
 
   /**
