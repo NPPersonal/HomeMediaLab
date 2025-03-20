@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import { Observable } from "object-observer";
 import { M3U8DownloadTask } from "./download-task.js";
+import EventEmitter from "eventemitter3";
 
 const DATA_FILE_PATH = "task-checkpoints.json";
 
@@ -36,7 +37,30 @@ const DefaultCheckpoint = {
  * Calling `init()` on instance to initialize the manager before using it. Any
  * subsequent call to `init()` will not do anything if the manager is initialized.
  */
-export default class DownloadManager {
+export default class DownloadManager extends EventEmitter {
+  static CheckpointEventTypes = {
+    /**
+     * Listener: (data) => void
+     *
+     * Emit when checkpoint is inserted into queue
+     */
+    Insert: "insert",
+
+    /**
+     * Listener: (data) => void
+     *
+     * Emit when checkpoint deleted from queue
+     */
+    Delete: "delete",
+
+    /**
+     * Listener: (data) => void
+     *
+     * Emit when checkpoint updated in queue
+     */
+    Update: "update,",
+  };
+
   //#region  Private fields
   /**
    * Global instance
@@ -65,6 +89,7 @@ export default class DownloadManager {
    *
    */
   constructor() {
+    super();
     this.#taskCheckpoint = this.loadCheckpoint(DATA_FILE_PATH);
   }
   //#endregion Constructor
@@ -110,20 +135,61 @@ export default class DownloadManager {
       }
     });
 
+    /**
+     * Transform observable change according to
+     * https://github.com/gullerya/object-observer/blob/main/docs/observable.md
+     *
+     * @param {*} change
+     * @returns as an Object
+     * ```
+     * {
+     * operation: 'kind of operation as string',
+     * in: 'checkpoint queue name as string',
+     * at: 'index in the queue as number',
+     * value: 'object that is associated with operation'
+     * }
+     * ```
+     */
+    const transformObservalChange = (change) => {
+      const index = change.path.pop();
+      const queueName = change.path.pop();
+      return {
+        operation: change.type,
+        in: queueName,
+        at: index,
+        value: change.value ? change.value : change.oldValue,
+      };
+    };
     // observe task checkpoint data change and write
     // data to json file
     Observable.observe(this.#taskCheckpoint, (changes) => {
       try {
         fs.writeJsonSync(DATA_FILE_PATH, this.#taskCheckpoint);
 
-        // changes.forEach((change) => {
-        //   console.log(
-        //     `write to json file ${change.type}`,
-        //     change.type === "insert" || change.type === "update"
-        //       ? change.value.progress
-        //       : 0
-        //   );
-        // });
+        changes.forEach((change) => {
+          if (change.type === "update") {
+            this.emit(
+              DownloadManager.CheckpointEventTypes.Update,
+              transformObservalChange(change)
+            );
+            return;
+          }
+
+          if (change.type === "insert") {
+            this.emit(
+              DownloadManager.CheckpointEventTypes.Insert,
+              transformObservalChange(change)
+            );
+            return;
+          }
+          if (change.type === "delete") {
+            this.emit(
+              DownloadManager.CheckpointEventTypes.Delete,
+              transformObservalChange(change)
+            );
+            return;
+          }
+        });
       } catch (error) {
         console.error(`Fail to write to json file ${error}`);
       }

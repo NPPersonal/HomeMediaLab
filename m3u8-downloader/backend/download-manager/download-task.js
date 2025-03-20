@@ -333,6 +333,8 @@ export class M3U8DownloadTask extends DownloadTask {
       output,
       workingDir,
       progress: 0,
+      downloaded: 0,
+      downloadFailed: 0,
       options: this.downloader.options,
     };
     this.registerEventListeners();

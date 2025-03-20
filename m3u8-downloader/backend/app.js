@@ -5,6 +5,15 @@ const port = 3000;
 import { TEMP_DIR } from "./utils/constant.js";
 
 const manager = DownloadManager.manager;
+manager.on(DownloadManager.CheckpointEventTypes.Update, (data) => {
+  console.log("manager update", JSON.stringify(data), "\n");
+});
+manager.on(DownloadManager.CheckpointEventTypes.Insert, (data) => {
+  console.log("manager insert", JSON.stringify(data), "\n");
+});
+manager.on(DownloadManager.CheckpointEventTypes.Delete, (data) => {
+  console.log("manager delete", JSON.stringify(data), "\n");
+});
 manager.init();
 
 const M3U8_MASTER_TEST_URL =
