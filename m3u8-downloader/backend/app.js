@@ -1,8 +1,16 @@
 import express from "express";
+import { createServer } from "node:http";
+import { Server } from "socket.io";
+import { TEMP_DIR } from "./utils/constant.js";
+
 const app = express();
+const server = createServer(app);
+const io = new Server(server);
 const port = 3000;
 
-import { TEMP_DIR } from "./utils/constant.js";
+io.on("connection", (socket) => {
+  console.log("a user connected");
+});
 
 const manager = DownloadManager.manager;
 manager.on(DownloadManager.CheckpointEventTypes.Update, (data) => {
@@ -38,6 +46,6 @@ app.get("/test", (req, res) => {
   res.send(`download started task id: ${task.taskId}`);
 });
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
