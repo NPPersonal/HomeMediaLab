@@ -83,6 +83,17 @@ export default class DownloadManager extends EventEmitter {
   #taskCheckpoint = undefined;
   //#endregion Private fields
 
+  //#region Setter
+  /**
+   * Setter
+   * 
+   * @return task checkpoints
+   */
+  get checkpoints(){
+    return this.#taskCheckpoint;
+  }
+  //#endregion Setter
+
   //#region  Constructor
   /**
    * Create an instance of manager

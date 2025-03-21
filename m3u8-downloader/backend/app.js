@@ -6,21 +6,31 @@ import { TEMP_DIR } from "./utils/constant.js";
 const app = express();
 const server = createServer(app);
 const io = new Server(server);
-const port = 3000;
+const port = 3001;
 
-io.on("connection", (socket) => {
+// setup socket
+const checkpointSocket = io.of("/checkpoints");
+checkpointSocket.on("connection", (socket) => {
   console.log("a user connected");
+  socket.on("disconnect", (reason) => {
+    console.log(`a user disconnected`, reason);
+  });
+  // emit checkpoints data when the socket connected
+  socket.emit("checkpoints", manager.checkpoints);
 });
 
 const manager = DownloadManager.manager;
 manager.on(DownloadManager.CheckpointEventTypes.Update, (data) => {
   console.log("manager update", JSON.stringify(data), "\n");
+  checkpointSocket.emit("update", data);
 });
 manager.on(DownloadManager.CheckpointEventTypes.Insert, (data) => {
   console.log("manager insert", JSON.stringify(data), "\n");
+  checkpointSocket.emit("insert", data);
 });
 manager.on(DownloadManager.CheckpointEventTypes.Delete, (data) => {
   console.log("manager delete", JSON.stringify(data), "\n");
+  checkpointSocket.emit("delete", data);
 });
 manager.init();
 
@@ -47,5 +57,5 @@ app.get("/test", (req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Server listening on port ${port}`);
 });
