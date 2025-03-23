@@ -34,6 +34,7 @@ const SUPPORT_OUTPUT_FILE_TYPES = [".mp4"];
 export default class M3U8Downloader extends EventEmitter {
   //#region Class event types
   static EventTypes = {
+    StatusChanged: "status_changed",
     /** Listener: () => void */
     Start: "start",
     /** Listener: (report) => void
@@ -114,9 +115,24 @@ export default class M3U8Downloader extends EventEmitter {
 
   //#region Class states
   static States = Object.assign(this.EventTypes, {
+    Unknown: "unknown",
     Running: "running",
   });
   //#endregion Class states
+
+  //#region  Getter
+  get status() {
+    return this._status;
+  }
+  //#endregion Getter
+
+  //#region Setter
+  set status(newStatus) {
+    const oldStatus = this._status;
+    this._status = newStatus;
+    this.emit(M3U8Downloader.EventTypes.StatusChanged, oldStatus, this._status);
+  }
+  //#endregion Setter
 
   //#region Constructor
   /**
@@ -126,8 +142,9 @@ export default class M3U8Downloader extends EventEmitter {
    * @param {string} output output path (e.g file/video/out.mp4)
    * @param {DefaultOptions} options options as object
    */
-  constructor(m3u8Url, output, options = DefaultOptions) {
+  constructor(m3u8Url, output, options = DefaultOptions, status = undefined) {
     super();
+    this.status = status ? status : M3U8Downloader.States.Unknown;
     this.options = Object.assign(DefaultOptions, options);
     this.m3u8Url = m3u8Url;
     // The playlistUrl is used to fetch playlist's segments,

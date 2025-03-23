@@ -21,15 +21,15 @@ checkpointSocket.on("connection", (socket) => {
 
 const manager = DownloadManager.manager;
 manager.on(DownloadManager.CheckpointEventTypes.Update, (data) => {
-  console.log("manager update", JSON.stringify(data), "\n");
+  // console.log("manager update", JSON.stringify(data), "\n");
   checkpointSocket.emit("update", data);
 });
 manager.on(DownloadManager.CheckpointEventTypes.Insert, (data) => {
-  console.log("manager insert", JSON.stringify(data), "\n");
+  // console.log("manager insert", JSON.stringify(data), "\n");
   checkpointSocket.emit("insert", data);
 });
 manager.on(DownloadManager.CheckpointEventTypes.Delete, (data) => {
-  console.log("manager delete", JSON.stringify(data), "\n");
+  // console.log("manager delete", JSON.stringify(data), "\n");
   checkpointSocket.emit("delete", data);
 });
 manager.init();
@@ -54,6 +54,36 @@ app.get("/test", (req, res) => {
   manager.startTaskBy(task.taskId);
 
   res.send(`download started task id: ${task.taskId}`);
+});
+
+app.get("/deleteFromCompleted", (req, res) => {
+  const taskId = req.query.taskId;
+  manager.removeTaskFromCompleted(taskId);
+  res.send(`Removed task from completed queue task id: ${taskId}`);
+});
+
+app.get("/deleteFromCanceled", (req, res) => {
+  const taskId = req.query.taskId;
+  manager.removeTaskFromCanceled(taskId);
+  res.send(`Removed task from canceled queue task id: ${taskId}`);
+});
+
+app.get("/pause", (req, res) => {
+  const taskId = req.query.taskId;
+  manager.pauseTaskBy(taskId);
+  res.send(`Pause task id: ${taskId}`);
+});
+
+app.get("/resume", (req, res) => {
+  const taskId = req.query.taskId;
+  manager.resumeTaskBy(taskId);
+  res.send(`Resume task id: ${taskId}`);
+});
+
+app.get("/cancel", (req, res) => {
+  const taskId = req.query.taskId;
+  manager.cancelTaskBy(taskId);
+  res.send(`Cancel task id: ${taskId}`);
 });
 
 server.listen(port, () => {

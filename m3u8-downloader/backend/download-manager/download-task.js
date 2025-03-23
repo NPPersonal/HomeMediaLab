@@ -41,6 +41,8 @@ export class DownloadTask extends EventEmitter {
 
   //#region Setter
   /**
+   * Setter
+   *
    * Is this task running
    */
   set isRunning(value) {
@@ -266,6 +268,17 @@ export class M3U8DownloadTask extends DownloadTask {
       downloadFailed: num,
     });
   }
+
+  /**
+   * Setter
+   *
+   * Save event logs
+   *
+   * @param {[string]} logs
+   */
+  set eventLogs(logs) {
+    this.checkpoint = Object.assign(this.checkpoint, { eventLogs: logs });
+  }
   //#endregion Setter
 
   //#region Constructor
@@ -319,14 +332,26 @@ export class M3U8DownloadTask extends DownloadTask {
    * the actual working directory will be `workingDir/{taskId}`
    * @param {DefaultOptions} options options will passed to M3U8Downloader
    */
-  init(m3u8Url, output, workingDir, options = { convert2Mp4: true }) {
-    this.status = M3U8DownloadTask.States.Init;
+  init(
+    m3u8Url,
+    output,
+    workingDir,
+    options = { convert2Mp4: true },
+    status = undefined,
+    downloaderStatus = undefined
+  ) {
+    this.status = status ? status : M3U8DownloadTask.States.Init;
     this.emit(M3U8DownloadTask.EventTypes.Init);
 
     options = Object.assign(options, {
       segmentsDir: path.join(workingDir, this.taskId),
     });
-    this.downloader = new M3U8Downloader(m3u8Url, output, options);
+    this.downloader = new M3U8Downloader(
+      m3u8Url,
+      output,
+      options,
+      downloaderStatus
+    );
     this.checkpoint = {
       status: this.status,
       m3u8Url,
@@ -348,31 +373,45 @@ export class M3U8DownloadTask extends DownloadTask {
 
   //#region Private methods
   registerEventListeners() {
+    this.downloader.on(
+      M3U8Downloader.EventTypes.StatusChanged,
+      (oldStatus, newStatus) => {
+        this.checkpoint = Object.assign(this.checkpoint, {
+          downloaderStatus: newStatus,
+        });
+      }
+    );
     this.downloader.on(M3U8Downloader.EventTypes.Start, () => {
       this.status = M3U8DownloadTask.States.Begin;
       this.isRunning = true;
+      this.eventLogs = this.downloader.eventLogs;
       this.emit(M3U8DownloadTask.EventTypes.Begin, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Pause, () => {
       this.status = M3U8DownloadTask.States.Pause;
       this.isRunning = false;
+      this.eventLogs = this.downloader.eventLogs;
       this.emit(M3U8DownloadTask.EventTypes.Pause, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Resume, () => {
       this.status = M3U8DownloadTask.States.Resume;
       this.isRunning = true;
+      this.eventLogs = this.downloader.eventLogs;
       this.emit(M3U8DownloadTask.EventTypes.Resume, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Canceled, () => {
       this.status = M3U8DownloadTask.States.Canceled;
       this.isRunning = false;
+      this.eventLogs = this.downloader.eventLogs;
       this.emit(M3U8DownloadTask.EventTypes.Canceled, this);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Progress, (progress) => {
       const progressFloat = parseFloat(progress.downloaded / progress.total);
       const progressDesc = `${parseInt(progressFloat * 100.0)}%`;
 
-      this.status = M3U8DownloadTask.States.Progress;
+      if (this.isRunning) {
+        this.status = M3U8DownloadTask.States.Progress;
+      }
       this.progress = progressFloat;
       this.downloaded = this.downloader.downloadedSegments;
 
@@ -386,12 +425,14 @@ export class M3U8DownloadTask extends DownloadTask {
     });
     this.downloader.on(M3U8Downloader.EventTypes.BeginMerge, () => {
       this.status = M3U8DownloadTask.States.MergingFiles;
+      this.eventLogs = this.downloader.eventLogs;
       this.emit(M3U8DownloadTask.EventTypes.MergingFiles, this);
     });
     this.downloader.on(
       M3U8Downloader.EventTypes.MergeCompleted,
       (mergedFilePath) => {
         this.status = M3U8DownloadTask.States.MerginFilesCompleted;
+        this.eventLogs = this.downloader.eventLogs;
         this.emit(
           M3U8DownloadTask.EventTypes.MerginFilesCompleted,
           this,
@@ -403,6 +444,7 @@ export class M3U8DownloadTask extends DownloadTask {
       M3U8Downloader.EventTypes.BeginConversion,
       (inputFilePath) => {
         this.status = M3U8DownloadTask.States.ConvertingVideo;
+        this.eventLogs = this.downloader.eventLogs;
         this.emit(
           M3U8DownloadTask.EventTypes.ConvertingVideo,
           this,
@@ -414,6 +456,7 @@ export class M3U8DownloadTask extends DownloadTask {
       M3U8Downloader.EventTypes.ConversionCompleted,
       (outputFilePath) => {
         this.status = M3U8DownloadTask.States.ConvertingVideoCompleted;
+        this.eventLogs = this.downloader.eventLogs;
         this.emit(
           M3U8DownloadTask.EventTypes.ConvertingVideoCompleted,
           this,
@@ -424,11 +467,13 @@ export class M3U8DownloadTask extends DownloadTask {
     this.downloader.on(M3U8Downloader.EventTypes.Error, (error) => {
       this.status = M3U8DownloadTask.States.Error;
       this.downloadFailed = this.downloader.downloadFailedSegments;
+      this.eventLogs = this.downloader.eventLogs;
       this.emit(M3U8DownloadTask.EventTypes.Error, this, error);
     });
     this.downloader.on(M3U8Downloader.EventTypes.Completed, (report) => {
       this.status = M3U8DownloadTask.States.Completed;
       this.isRunning = false;
+      this.eventLogs = this.downloader.eventLogs;
       if (!this.downloader.options.interruptOnError) {
         this.progress = 1.0;
       }

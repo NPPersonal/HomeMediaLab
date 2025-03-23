@@ -86,10 +86,10 @@ export default class DownloadManager extends EventEmitter {
   //#region Setter
   /**
    * Setter
-   * 
+   *
    * @return task checkpoints
    */
-  get checkpoints(){
+  get checkpoints() {
     return this.#taskCheckpoint;
   }
   //#endregion Setter
@@ -135,7 +135,9 @@ export default class DownloadManager extends EventEmitter {
         checkpoint.m3u8Url,
         checkpoint.output,
         checkpoint.workingDir,
-        checkpoint.options
+        checkpoint.options,
+        checkpoint.status,
+        checkpoint.downloaderStatus
       );
 
       this.queueAddTask(task);

@@ -5,10 +5,23 @@ import { createSocket, invalidateSocket } from "@/lib/socket";
 import { useEffect, useState } from "react";
 import { Socket } from "socket.io-client";
 
-interface CheckpointsType {
-  queued: [{ [key: string]: any }] | [];
-  completed: [{ [key: string]: any }] | [];
-  canceled: [{ [key: string]: any }] | [];
+export interface CheckpointType {
+  taskId: string;
+  isRunning: boolean;
+  status: string;
+  output: string;
+  workingDir: string;
+  downloaded: number;
+  downloadFailed: number;
+  progress: number;
+  options: { [key: string]: any };
+  [key: string]: any;
+  eventLogs: [string];
+}
+interface CheckpointQueuedType {
+  queued: Array<CheckpointType>;
+  completed: Array<CheckpointType>;
+  canceled: Array<CheckpointType>;
 }
 
 interface SocketInfoType {
@@ -18,7 +31,7 @@ interface SocketInfoType {
 }
 
 const useCheckpoints = () => {
-  const [checkpoints, setCheckpoints] = useState<CheckpointsType>({
+  const [checkpoints, setCheckpoints] = useState<CheckpointQueuedType>({
     queued: [],
     completed: [],
     canceled: [],
@@ -85,13 +98,22 @@ const useCheckpoints = () => {
 
         if (found) return value;
 
-        console.log("insert");
+        // console.log("insert", queueName, index);
+
+        // make a copy of checkpoint from old checkpoint state
         const newValue = { ...value };
-        newValue[queueName as keyof typeof checkpoints].splice(
-          index,
-          0,
-          data.value
+        /**
+         * ! important if you don't do the following
+         * react would not rerender view when state changed
+         */
+        // create a new array from the queue
+        const newQueue = Array.from(
+          newValue[queueName as keyof typeof checkpoints]
         );
+        // manipulate the new array which is insert a value
+        newQueue.splice(index, 0, data.value);
+        // re-assign the new array back to new checkpoint's queue
+        newValue[queueName as keyof typeof checkpoints] = newQueue;
         return newValue;
       });
     }
@@ -109,9 +131,25 @@ const useCheckpoints = () => {
 
         if (!found) return value;
 
-        console.log("delete");
+        // console.log("delete", queueName, index);
+
+        // make a copy of checkpoint from old checkpoint state
         const newValue = { ...value };
-        newValue[queueName as keyof typeof checkpoints].splice(index, 1);
+
+        /**
+         * ! important if you don't do the following
+         * react would not rerender view when state changed
+         */
+        // create a new array from the queue
+        const newQueue = Array.from(
+          newValue[queueName as keyof typeof checkpoints]
+        );
+
+        // manipulate the new array which is delete a value from new array
+        newQueue.splice(index, 1);
+
+        // re-assign the new array back to new checkpoint's queue
+        newValue[queueName as keyof typeof checkpoints] = newQueue;
         return newValue;
       });
     }
@@ -129,7 +167,7 @@ const useCheckpoints = () => {
 
         if (!found) return value;
 
-        console.log("update");
+        // console.log("update", queueName, index);
         const newValue = { ...value };
         newValue[queueName as keyof typeof checkpoints][index] = data.value;
         return newValue;
