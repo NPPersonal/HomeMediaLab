@@ -9,6 +9,8 @@ export interface CheckpointType {
   taskId: string;
   isRunning: boolean;
   status: string;
+  downloaderStatus: string;
+  m3u8Url: string;
   output: string;
   workingDir: string;
   downloaded: number;
@@ -81,7 +83,7 @@ const useCheckpoints = () => {
     }
 
     function onCheckpoints(checkpoints: any) {
-      console.log("on checkpoints");
+      // console.log("on checkpoints");
       setCheckpoints(checkpoints);
     }
 

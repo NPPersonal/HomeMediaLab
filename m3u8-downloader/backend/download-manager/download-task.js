@@ -138,7 +138,7 @@ export class M3U8DownloadTask extends DownloadTask {
        }
         ```
     */
-    Progress: "progress",
+    Progress: "downloading",
 
     /** Listener: (M3U8DownloadTask) => void */
     MergingFiles: "merging_files",
@@ -331,6 +331,8 @@ export class M3U8DownloadTask extends DownloadTask {
    * @param {string} workingDir task's working directory e.g `./tmp`,
    * the actual working directory will be `workingDir/{taskId}`
    * @param {DefaultOptions} options options will passed to M3U8Downloader
+   * @param {string} status task's status only for recovery
+   * @param {string} downloaderStatus downloader's status only for recovery
    */
   init(
     m3u8Url,
@@ -354,6 +356,7 @@ export class M3U8DownloadTask extends DownloadTask {
     );
     this.checkpoint = {
       status: this.status,
+      downloaderStatus: this.downloader.status,
       m3u8Url,
       output,
       workingDir,

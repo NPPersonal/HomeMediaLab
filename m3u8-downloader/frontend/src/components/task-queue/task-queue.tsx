@@ -56,6 +56,18 @@ const TaskQueue = (props: PropType) => {
                 <span>{task.status}</span>
               </p>
               <p className="flex space-x-1">
+                <Label htmlFor="term">Downloader Status:</Label>
+                <span>{task.downloaderStatus}</span>
+              </p>
+              <p className="flex space-x-1">
+                <Label htmlFor="term">Source URL:</Label>
+                <span>{task.m3u8Url}</span>
+              </p>
+              <p className="flex space-x-1">
+                <Label htmlFor="term">Output:</Label>
+                <span>{task.output}</span>
+              </p>
+              <p className="flex space-x-1">
                 <Label htmlFor="term">Working directory:</Label>
                 <span>{task.workingDir}</span>
               </p>

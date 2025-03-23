@@ -275,6 +275,10 @@ export default class M3U8Downloader extends EventEmitter {
     if (this.status !== M3U8Downloader.States.Pause) return;
     this.status = M3U8Downloader.States.Running;
     this.emit(M3U8Downloader.EventTypes.Resume);
+    if (this.queue.size === 0) {
+      this.download();
+      return;
+    }
     this.queue.start();
   }
 
