@@ -8,7 +8,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Label } from "@/components/ui/label";
+// import { Label } from "@/components/ui/label";
+import KVField from "../kv-field/kv-field";
 
 interface PropType {
   triggerName: string;
@@ -21,19 +22,29 @@ const KVAccordion = (props: PropType) => {
     <Accordion type="single" collapsible>
       {kvObject && (
         <AccordionItem value={triggerName}>
-          <AccordionTrigger className="font-bold">
+          <AccordionTrigger className="font-bold text-lg">
             {triggerName}
           </AccordionTrigger>
-          <AccordionContent className="flex flex-col">
+          <AccordionContent className="flex flex-col space-x-1">
             {Object.keys(kvObject).map((key, i) => {
-              if (kvObject[key].constructor.name !== "Object") {
+              // if value is not an Object and not an Array
+              if (
+                !(kvObject[key] instanceof Object) &&
+                !(kvObject[key] instanceof Array)
+              ) {
                 return (
-                  <span key={`${key}-${i}`} className="flex space-x-1">
-                    <Label htmlFor="term">{`${key}: `}</Label>
-                    <span>{`${kvObject[key]}`}</span>
-                  </span>
+                  <KVField
+                    key={`${key}-${i}`}
+                    label={`${key}`}
+                    value={`${kvObject[key]}`}
+                  />
                 );
-              } else {
+              }
+              // if value is an Object
+              if (
+                kvObject[key] instanceof Object &&
+                !(kvObject[key] instanceof Array)
+              ) {
                 return (
                   <KVAccordion
                     key={`${key}-${i}`}

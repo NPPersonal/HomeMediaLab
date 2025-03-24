@@ -3,10 +3,28 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import useCheckpoints from "@/hooks/download-checkpoints";
 import React from "react";
-import TaskQueue from "@/components/task-queue/task-queue";
+import TaskCollection from "@/components/task-collection/task-collection";
+import DownloadTask from "@/components/task-collection/download-task";
+import {
+  cancelTask,
+  pauseTask,
+  removeTaskFromCanceled,
+  removeTaskFromCompleted,
+  resumeTask,
+} from "@/actions/server-actions";
+import CopmletedTask from "@/components/task-collection/completed-task";
+import CanceledTask from "@/components/task-collection/canceled-task";
 
 export default function Home() {
-  const { checkpoints } = useCheckpoints();
+  const { checkpoints, socketInfo } = useCheckpoints();
+
+  if (!socketInfo.isConnected) {
+    return (
+      <div className="flex justify-center items-center">
+        <p className="font-bold text-lg break-all">Lost connection to server</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex justify-center">
@@ -20,19 +38,51 @@ export default function Home() {
           className="flex flex-col items-center min-h-screen"
           value="download"
         >
-          <TaskQueue taskQueued={checkpoints.queued} />
+          <TaskCollection
+            tasks={checkpoints.queued}
+            renderTask={(task) => {
+              return (
+                <DownloadTask
+                  taskData={task}
+                  onPlayClick={(task) => resumeTask(task.taskId)}
+                  onPauseClick={(task) => pauseTask(task.taskId)}
+                  onCancelClick={(task) => cancelTask(task.taskId)}
+                />
+              );
+            }}
+          />
         </TabsContent>
         <TabsContent
           className="flex flex-col items-center min-h-screen"
           value="completed"
         >
-          <TaskQueue taskQueued={checkpoints.completed} />
+          <TaskCollection
+            tasks={checkpoints.completed}
+            renderTask={(task) => {
+              return (
+                <CopmletedTask
+                  taskData={task}
+                  onDeleteClick={(task) => removeTaskFromCompleted(task.taskId)}
+                />
+              );
+            }}
+          />
         </TabsContent>
         <TabsContent
           className="flex flex-col items-center min-h-screen"
           value="canceled"
         >
-          <TaskQueue taskQueued={checkpoints.canceled} />
+          <TaskCollection
+            tasks={checkpoints.canceled}
+            renderTask={(task) => {
+              return (
+                <CanceledTask
+                  taskData={task}
+                  onDeleteClick={(task) => removeTaskFromCanceled(task.taskId)}
+                />
+              );
+            }}
+          />
         </TabsContent>
       </Tabs>
     </div>

@@ -46,7 +46,6 @@ const useCheckpoints = () => {
   });
 
   useEffect(() => {
-    console.log("use effect");
     function onConnected() {
       console.log("on socket connected");
       setSocketInfo((value) => ({

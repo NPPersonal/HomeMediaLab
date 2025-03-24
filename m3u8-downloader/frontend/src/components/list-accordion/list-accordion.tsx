@@ -22,17 +22,17 @@ const ListAccordion = (props: PropType) => {
     <Accordion type="single" collapsible>
       {list && (
         <AccordionItem value={triggerName}>
-          <AccordionTrigger className="font-bold">
+          <AccordionTrigger className="font-bold text-lg">
             {triggerName}
           </AccordionTrigger>
-          <AccordionContent className="flex flex-col space-y-1">
+          <AccordionContent className="flex flex-col space-y-2">
             {list.map((item, i) => {
               if (
                 item.constructor.name !== "Array" &&
                 item.constructor.name !== "Object"
               ) {
                 return (
-                  <Label key={`${i}`} htmlFor="term">
+                  <Label key={`${i}`} className="break-all" htmlFor="term">
                     {item}
                   </Label>
                 );

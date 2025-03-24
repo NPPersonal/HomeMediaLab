@@ -1,9 +1,11 @@
 import express from "express";
+import bodyParser from "body-parser";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { TEMP_DIR } from "./utils/constant.js";
 
 const app = express();
+app.use(bodyParser.json());
 const server = createServer(app);
 const io = new Server(server);
 const port = 3001;
@@ -42,6 +44,18 @@ const M3U8_TEST_URL =
 import { M3U8DownloadTask } from "./download-manager/download-task.js";
 import DownloadManager from "./download-manager/download-manager.js";
 
+const checkTaskId = (req, res, next) => {
+  const { taskId } = req.body;
+  if (!taskId) {
+    res
+      .status(400)
+      .send(JSON.stringify({ message: "taskId is missing in request's body" }));
+    return;
+  }
+  console.log("middleware");
+  next();
+};
+
 app.get("/test", (req, res) => {
   const task = manager.addTask(
     new M3U8DownloadTask().init(
@@ -50,40 +64,55 @@ app.get("/test", (req, res) => {
       TEMP_DIR
     )
   );
-
   manager.startTaskBy(task.taskId);
-
   res.send(`download started task id: ${task.taskId}`);
 });
 
-app.get("/deleteFromCompleted", (req, res) => {
-  const taskId = req.query.taskId;
+app.post("/delete/from/completed", checkTaskId, (req, res) => {
+  const { taskId } = req.body;
+
   manager.removeTaskFromCompleted(taskId);
-  res.send(`Removed task from completed queue task id: ${taskId}`);
+  res.status(200).send(
+    JSON.stringify({
+      message: `remove task from completed with id: ${taskId}`,
+    })
+  );
 });
 
-app.get("/deleteFromCanceled", (req, res) => {
-  const taskId = req.query.taskId;
+app.post("/delete/from/canceled", checkTaskId, (req, res) => {
+  const { taskId } = req.body;
+
   manager.removeTaskFromCanceled(taskId);
-  res.send(`Removed task from canceled queue task id: ${taskId}`);
+  res.status(200).send(
+    JSON.stringify({
+      message: `remove task from canceled with id: ${taskId}`,
+    })
+  );
 });
 
-app.get("/pause", (req, res) => {
-  const taskId = req.query.taskId;
+app.post("/pause", checkTaskId, (req, res) => {
+  const { taskId } = req.body;
+
   manager.pauseTaskBy(taskId);
-  res.send(`Pause task id: ${taskId}`);
+  res.status(200).send(JSON.stringify({ message: `pause task id: ${taskId}` }));
 });
 
-app.get("/resume", (req, res) => {
-  const taskId = req.query.taskId;
+app.post("/resume", checkTaskId, (req, res) => {
+  const { taskId } = req.body;
+
   manager.resumeTaskBy(taskId);
-  res.send(`Resume task id: ${taskId}`);
+  res
+    .status(200)
+    .send(JSON.stringify({ message: `resume task id: ${taskId}` }));
 });
 
-app.get("/cancel", (req, res) => {
-  const taskId = req.query.taskId;
+app.post("/cancel", checkTaskId, (req, res) => {
+  const { taskId } = req.body;
+
   manager.cancelTaskBy(taskId);
-  res.send(`Cancel task id: ${taskId}`);
+  res
+    .status(200)
+    .send(JSON.stringify({ message: `cancel task id: ${taskId}` }));
 });
 
 server.listen(port, () => {
