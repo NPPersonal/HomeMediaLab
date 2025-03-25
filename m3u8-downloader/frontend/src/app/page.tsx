@@ -2,7 +2,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import useCheckpoints from "@/hooks/download-checkpoints";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import TaskCollection from "@/components/task-collection/task-collection";
 import DownloadTask from "@/components/task-collection/download-task";
 import {
@@ -14,26 +14,54 @@ import {
 } from "@/actions/server-actions";
 import CopmletedTask from "@/components/task-collection/completed-task";
 import CanceledTask from "@/components/task-collection/canceled-task";
+import { Input } from "@/components/ui/input";
 
 export default function Home() {
-  const { checkpoints, socketInfo } = useCheckpoints();
+  const { checkpoints } = useCheckpoints();
+  const [url, setUrl] = useState("");
 
-  if (!socketInfo.isConnected) {
-    return (
-      <div className="flex justify-center items-center">
-        <p className="font-bold text-lg break-all">Lost connection to server</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const getPageContent = async (url: string) => {
+      const response = await fetch(url);
+      console.log(await response.text());
+    };
+    if (url && new RegExp(/^https?:\/\//).test(url)) {
+      getPageContent(url);
+    }
+  }, [url]);
+
+  // if (!socketInfo.isConnected) {
+  //   return (
+  //     <div className="flex justify-center items-center">
+  //       <p className="font-bold text-lg break-all">Lost connection to server</p>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="flex justify-center">
       <Tabs className="min-w-full" defaultValue="download">
         <TabsList className="flex justify-center w-full">
+          <TabsTrigger value="m3u8">M3U8</TabsTrigger>
           <TabsTrigger value="download">{`Download(${checkpoints.queued.length})`}</TabsTrigger>
           <TabsTrigger value="completed">{`Completed(${checkpoints.completed.length})`}</TabsTrigger>
           <TabsTrigger value="canceled">{`Canceled(${checkpoints.canceled.length})`}</TabsTrigger>
         </TabsList>
+        <TabsContent
+          className="flex flex-col items-center min-h-screen"
+          value="m3u8"
+        >
+          <div>
+            <Input
+              type="url"
+              placeholder="URL"
+              value={url}
+              onChange={(value) => {
+                setUrl(value.target.value);
+              }}
+            />
+          </div>
+        </TabsContent>
         <TabsContent
           className="flex flex-col items-center min-h-screen"
           value="download"

@@ -115,6 +115,16 @@ app.post("/cancel", checkTaskId, (req, res) => {
     .send(JSON.stringify({ message: `cancel task id: ${taskId}` }));
 });
 
+app.get("/fetch/html", async (req, res) => {
+  try {
+    const url = req.query.url;
+    const content = await getContent(url);
+    res.status(200).send({ data: body });
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+});
+
 server.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
