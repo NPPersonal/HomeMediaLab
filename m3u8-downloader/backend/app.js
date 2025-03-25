@@ -1,11 +1,13 @@
 import express from "express";
 import bodyParser from "body-parser";
+import cors from "cors";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { TEMP_DIR } from "./utils/constant.js";
 
 const app = express();
 app.use(bodyParser.json());
+app.use(cors());
 const server = createServer(app);
 const io = new Server(server);
 const port = 3001;
@@ -43,6 +45,7 @@ const M3U8_TEST_URL =
 
 import { M3U8DownloadTask } from "./download-manager/download-task.js";
 import DownloadManager from "./download-manager/download-manager.js";
+import { scrapeM3U8Urls } from "./utils/scrapper.js";
 
 const checkTaskId = (req, res, next) => {
   const { taskId } = req.body;
@@ -52,7 +55,7 @@ const checkTaskId = (req, res, next) => {
       .send(JSON.stringify({ message: "taskId is missing in request's body" }));
     return;
   }
-  console.log("middleware");
+  // console.log("middleware");
   next();
 };
 
@@ -66,6 +69,16 @@ app.get("/test", (req, res) => {
   );
   manager.startTaskBy(task.taskId);
   res.send(`download started task id: ${task.taskId}`);
+});
+
+app.get("/download/hls", (req, res) => {
+  const url = req.query.url;
+
+  const task = manager.addTask(
+    new M3U8DownloadTask().init(url, "output/out.mp4", TEMP_DIR)
+  );
+  manager.startTaskBy(task.taskId);
+  res.status(200).send(JSON.stringify({ taskId: task.taskId }));
 });
 
 app.post("/delete/from/completed", checkTaskId, (req, res) => {
@@ -115,11 +128,11 @@ app.post("/cancel", checkTaskId, (req, res) => {
     .send(JSON.stringify({ message: `cancel task id: ${taskId}` }));
 });
 
-app.get("/fetch/html", async (req, res) => {
+app.get("/scrape/hls/from", async (req, res) => {
   try {
     const url = req.query.url;
-    const content = await getContent(url);
-    res.status(200).send({ data: body });
+    const m3u8Urls = await scrapeM3U8Urls(url);
+    res.status(200).send({ data: m3u8Urls });
   } catch (err) {
     res.status(500).send({ message: err.message });
   }

@@ -7,28 +7,70 @@ import TaskCollection from "@/components/task-collection/task-collection";
 import DownloadTask from "@/components/task-collection/download-task";
 import {
   cancelTask,
+  downloadHLS,
   pauseTask,
   removeTaskFromCanceled,
   removeTaskFromCompleted,
   resumeTask,
+  scrapeHLSFromWeb,
 } from "@/actions/server-actions";
 import CopmletedTask from "@/components/task-collection/completed-task";
 import CanceledTask from "@/components/task-collection/canceled-task";
 import { Input } from "@/components/ui/input";
+import { isM3U8Url, isUrl } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import HLSDownloader from "@/components/hls-downloader/hls-downloader";
+import { ArrowBigDownDash, CircleX, ListChecks, SquareX } from "lucide-react";
 
 export default function Home() {
   const { checkpoints } = useCheckpoints();
-  const [url, setUrl] = useState("");
+  const [webUrl, setWebUrl] = useState("");
+  const [scrappingUrl, setScrappingUrl] = useState("");
+  const [foundHLSUrls, setFoundHLSUrls] = useState<string[] | undefined>(
+    undefined
+  );
+  const [isScrapping, setIsScrapping] = useState(false);
+  const [scrappingError, setScrappingError] = useState<Error | undefined>(
+    undefined
+  );
+
+  const onHLSDownload = async (url: string) => {
+    downloadHLS(url);
+  };
 
   useEffect(() => {
-    const getPageContent = async (url: string) => {
-      const response = await fetch(url);
-      console.log(await response.text());
-    };
-    if (url && new RegExp(/^https?:\/\//).test(url)) {
-      getPageContent(url);
+    async function scrapeHLS(url: string) {
+      try {
+        setIsScrapping(true);
+        let data = undefined;
+        if (isM3U8Url(url)) {
+          data = [url];
+        } else {
+          const jsonData = await scrapeHLSFromWeb(url);
+          data = jsonData.data;
+        }
+        // console.log(data);
+        setIsScrapping(false);
+        setScrappingError(undefined);
+        setFoundHLSUrls(data);
+      } catch (error) {
+        setFoundHLSUrls(undefined);
+        if (error instanceof Error) {
+          setScrappingError(error);
+        } else {
+          setScrappingError(new Error(`Scrapping HLS fail ${url}`));
+        }
+      }
     }
-  }, [url]);
+
+    if (scrappingUrl !== "") {
+      if (isUrl(scrappingUrl)) {
+        scrapeHLS(scrappingUrl);
+      } else {
+        setScrappingError(new Error(`HLS url not valid ${scrappingUrl}`));
+      }
+    }
+  }, [scrappingUrl]);
 
   // if (!socketInfo.isConnected) {
   //   return (
@@ -42,23 +84,67 @@ export default function Home() {
     <div className="flex justify-center">
       <Tabs className="min-w-full" defaultValue="download">
         <TabsList className="flex justify-center w-full">
-          <TabsTrigger value="m3u8">M3U8</TabsTrigger>
-          <TabsTrigger value="download">{`Download(${checkpoints.queued.length})`}</TabsTrigger>
-          <TabsTrigger value="completed">{`Completed(${checkpoints.completed.length})`}</TabsTrigger>
-          <TabsTrigger value="canceled">{`Canceled(${checkpoints.canceled.length})`}</TabsTrigger>
+          <TabsTrigger value="hls-downloader">HLS Downloader</TabsTrigger>
+          <TabsTrigger value="download">
+            <div className="flex justify-center items-center space-x-2">
+              <ArrowBigDownDash />
+              {checkpoints.queued.length > 0
+                ? `(${checkpoints.queued.length})`
+                : null}
+            </div>
+          </TabsTrigger>
+          <TabsTrigger value="completed">
+            <div className="flex justify-center items-center space-x-2">
+              <ListChecks />
+              {checkpoints.completed.length > 0
+                ? `(${checkpoints.completed.length})`
+                : null}
+            </div>
+          </TabsTrigger>
+          <TabsTrigger value="canceled">
+            <div className="flex justify-center items-center space-x-2">
+              <SquareX />
+              {checkpoints.canceled.length > 0
+                ? `(${checkpoints.canceled.length})`
+                : null}
+            </div>
+          </TabsTrigger>
         </TabsList>
         <TabsContent
           className="flex flex-col items-center min-h-screen"
-          value="m3u8"
+          value="hls-downloader"
         >
-          <div>
-            <Input
-              type="url"
-              placeholder="URL"
-              value={url}
-              onChange={(value) => {
-                setUrl(value.target.value);
-              }}
+          <div className="flex flex-col items-center space-y-2">
+            <p>Scrape HLS URL from website or direct HLS URL</p>
+            <div className="flex justify-center space-x-2">
+              <Input
+                value={webUrl}
+                placeholder="Enter website url or HLS url"
+                onChange={(value) => setWebUrl(value.target.value)}
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setWebUrl("")}
+              >
+                <CircleX />
+              </Button>
+            </div>
+            {scrappingError && (
+              <p className="text-red-500 break-all">{scrappingError.message}</p>
+            )}
+            <Button
+              variant="outline"
+              disabled={isScrapping}
+              onClick={() => setScrappingUrl(webUrl)}
+            >
+              {isScrapping ? "Scrapping ..." : "Scrape HLS"}
+            </Button>
+          </div>
+          <div className="mt-2">
+            <HLSDownloader
+              hlsUrls={foundHLSUrls}
+              onDownloadClick={onHLSDownload}
             />
           </div>
         </TabsContent>
