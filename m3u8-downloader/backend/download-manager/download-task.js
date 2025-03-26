@@ -1,8 +1,41 @@
 import EventEmitter from "eventemitter3";
 import { v4 as uuidv4 } from "uuid";
-import path from "node:path";
-import M3U8Downloader from "../modules/m3u8-downloader/src/index.js";
-import { DefaultOptions } from "../modules/m3u8-downloader/src/types.js";
+import { dateTimeLog } from "./libs/utils.js";
+
+const getTaskEventTypes = () => {
+  return {
+    /** (task)=>void */
+    Init: "init",
+    /** (task)=>void */
+    Pending: "pending",
+    /** (task)=>void */
+    Start: "start",
+    /** (task)=>void */
+    Pause: "pause",
+    /** (task)=>void */
+    Resume: "resume",
+    /** (task)=>void */
+    Canceled: "canceled",
+    /** (task)=>void */
+    PreProcessing: "pre-processing",
+    /** (task)=>void */
+    Downloading: "downloading",
+    /** (task)=>void */
+    PostProcessing: "post-processing",
+    /** (task)=>void */
+    Completed: "completed",
+    /** (task, Error)=>void */
+    Error: "error",
+    /** (oldStatus, newStatus)=>void */
+    StatusChanged: "status-changed",
+  };
+};
+
+const getTaskStateTypes = () => {
+  const states = Object.assign({ Unknown: "unknown" }, getTaskEventTypes());
+  delete states.StatusChanged;
+  return states;
+};
 
 /**
  * Generic Download task to be inherited
@@ -15,16 +48,35 @@ import { DefaultOptions } from "../modules/m3u8-downloader/src/types.js";
  * - Transforming the task to json object.
  */
 export class DownloadTask extends EventEmitter {
+  static EventTypes = getTaskEventTypes();
+
+  static StateTypes = getTaskStateTypes();
+
   //#region Private fields
-  /** Private field of task id */
+  /** Private field
+   *
+   * task id
+   */
   #taskId;
 
-  /** Private indicate this task is running or not */
-  #isRunning = false;
+  /**
+   * Private field
+   *
+   * task status
+   */
+  #status = DownloadTask.StateTypes.Unknown;
+
+  /** Private field
+   *
+   * array of string contain all even logs
+   */
+  #eventLogs = [];
   //#endregion Private fields
 
   //#region Getter
   /**
+   * Getter
+   *
    * Return this task's id
    */
   get taskId() {
@@ -32,10 +84,36 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
+   * Getter
+   *
+   * Return task's status
+   */
+  get status() {
+    return this.#status;
+  }
+
+  /**
+   * Getter
+   *
    * Return true if task is running otherwise false
    */
   get isRunning() {
-    return this.#isRunning;
+    return (
+      this.status === DownloadTask.StateTypes.Start ||
+      this.status === DownloadTask.StateTypes.Resume ||
+      this.status === DownloadTask.StateTypes.PreProcessing ||
+      this.status === DownloadTask.StateTypes.Downloading ||
+      this.status === DownloadTask.StateTypes.PostProcessing
+    );
+  }
+
+  /**
+   * Getter
+   *
+   * Return event logs as array
+   */
+  get evenLogs() {
+    return this.#eventLogs;
   }
   //#endregion Getter
 
@@ -43,447 +121,222 @@ export class DownloadTask extends EventEmitter {
   /**
    * Setter
    *
-   * Is this task running
+   * Set task status
    */
-  set isRunning(value) {
-    this.#isRunning = value;
+  set status(newStatus) {
+    this.#status = newStatus;
   }
   //#endregion Setter
 
   //#region Constructor
-  constructor(taskId = undefined) {
+  constructor() {
     super();
+  }
+
+  //#endregion Constructor
+
+  //#region Public methods
+  /**
+   * Initialize the task
+   *
+   * @param {string} taskId create new id for this task if `undefined`
+   * @returns instance of the task
+   */
+  init(taskId = undefined) {
+    this.changeStatus(DownloadTask.StateTypes.Init, () => {
+      this.addEventLog("Task initializing");
+      this.emit(DownloadTask.EventTypes.Init, this);
+    });
+
     if (!taskId) {
       this.#taskId = uuidv4();
     } else {
       this.#taskId = taskId;
     }
-  }
-  //#endregion Constructor
 
-  //#region Public methods
+    this.changeStatus(DownloadTask.StateTypes.Pending, () => {
+      this.addEventLog("Task pending");
+      this.emit(DownloadTask.EventTypes.Pending, this);
+    });
+
+    return this;
+  }
+
   /**
    * Start the task asynchronously
-   *
-   * @returns
    */
-  async start() {}
+  async start() {
+    try {
+      if (!this.isRunning) {
+        this.changeStatus(DownloadTask.StateTypes.Start, () => {
+          this.addEventLog("Start");
+          this.emit(DownloadTask.EventTypes.Start, this);
+        });
+        await this.doStart();
+
+        this.changeStatus(DownloadTask.StateTypes.PreProcessing, () => {
+          this.addEventLog("Pre Proccessing");
+          this.emit(DownloadTask.EventTypes.PreProcessing, this);
+        });
+        await this.preProcessing();
+
+        this.changeStatus(DownloadTask.StateTypes.Downloading, () => {
+          this.addEventLog("Downloading");
+          this.emit(DownloadTask.EventTypes.Downloading, this);
+        });
+        await this.processing();
+
+        this.changeStatus(DownloadTask.StateTypes.PostProcessing, () => {
+          this.addEventLog("Post processing");
+          this.emit(DownloadTask.EventTypes.PostProcessing, this);
+        });
+        await this.postProcessing();
+
+        await this.doComplete();
+        this.changeStatus(DownloadTask.StateTypes.Completed, () => {
+          this.addEventLog("Task completed");
+          this.emit(DownloadTask.EventTypes.Completed, this);
+        });
+      }
+    } catch (error) {
+      this.changeStatus(DownloadTask.StateTypes.Error, () => {
+        this.addEventLog(`Error: ${error.message}`);
+        this.emit(
+          DownloadTask.EventTypes.Error,
+          this,
+          new Error(`Task ${this.taskId} fail\n${error.message}`)
+        );
+      });
+    }
+  }
 
   /**
    * Pause the task
    */
-  async pause() {}
+  async pause() {
+    if (!this.isRunning) return;
+
+    this.changeStatus(DownloadTask.StateTypes.Pause, () => {
+      this.addEventLog("Pause");
+      this.emit(DownloadTask.EventTypes.Pause, this);
+    });
+    this.doPause();
+  }
 
   /**
    * Resume the task
    */
-  async resume() {}
+  async resume() {
+    if (this.status !== DownloadTask.StateTypes.Pause) return;
+
+    this.changeStatus(DownloadTask.StateTypes.Resume, () => {
+      this.addEventLog("Resume");
+      this.emit(DownloadTask.EventTypes.Resume, this);
+    });
+    this.doResume();
+  }
 
   /**
    * Cancel the task
    */
-  async cancel() {}
+  async cancel() {
+    this.doCancel();
+    this.changeStatus(DownloadTask.StateTypes.Canceled, () => {
+      this.addEventLog("Canceled");
+      this.emit(DownloadTask.EventTypes.Canceled, this);
+    });
+  }
 
   /**
    * Get json object of this task
    * @returns a JSON object
    */
   toJson() {
-    return { taskId: this.#taskId, isRunning: this.#isRunning };
+    return { taskId: this.#taskId, status: this.status };
+  }
+
+  /**
+   * Add an event log to log array
+   *
+   * @param {string} message
+   * @return log in string
+   */
+  addEventLog(message) {
+    const log = dateTimeLog(message);
+    this.#eventLogs.push(log);
+    return log;
   }
   //#endregion Public methods
-}
 
-/**
- * M3U8DownloadTask is inherited from `DownloadTask` class.
- * M3U8DownloadTask is also a wrapper for `M3U8Downloader`
- * which responsible for downloading video segments from .m3u8 file.
- *
- * This task responsible for:
- * - Create an instance of `M3U8Downloader`
- * - Listening to `M3U8Downloader` events and handling events
- * - Emitting events
- * - Provide interface for controlling `M3U8Downloader`
- * - Manage task state
- *
- * Usage:
- *
- * Create an instance of `M3U8DownloadTask` then
- * call `init()` on the instance and provide requiried arguments
- */
-export class M3U8DownloadTask extends DownloadTask {
-  //#region Class event types
-  static EventTypes = {
-    /** Listener: (M3U8DownloadTask) => void */
-    Init: "init",
-    /** Listener: (M3U8DownloadTask) => void */
-    Pending: "pending",
-    /** Listener: (M3U8DownloadTask) => void */
-    Begin: "begin",
-    /** Listener: (M3U8DownloadTask) => void */
-    Pause: "pause",
-    /** Listener: (M3U8DownloadTask) => void */
-    Resume: "resume",
-    /** Listener: (M3U8DownloadTask) => void */
-    Canceled: "canceled",
-    /** Listener: (M3U8DownloadTask, progress) => void
-     * 
-     * `progress`: 
-     * ```
-     * {
-        url: m3u8 .ts file url,
-        filePath: file path to downloaded .ts file,
-        progress: progress in float from 0 ~ 1,
-        progressDesc: progress description,
-       }
-        ```
-    */
-    Progress: "downloading",
-
-    /** Listener: (M3U8DownloadTask) => void */
-    MergingFiles: "merging_files",
-    /** Listener: (M3U8DownloadTask, mergedFilePath) => void
-     *
-     * `mergedFilePath`: path to merged file
-     */
-    MerginFilesCompleted: "merging_files_completed",
-    /** Listener: (M3U8DownloadTask, inputFilePath) => void
-     *
-     * `inputFilePath`: path to input file(merged file)
-     */
-    ConvertingVideo: "converting_video",
-    /** Listener: (M3U8DownloadTask, outputFilePath) => void
-     *
-     * `outputFilePath`: path to output file
-     */
-    ConvertingVideoCompleted: "converting_video_completed",
-    /** Listener: (M3U8DownloadTask, error) => void
-     *
-     * `error`: Error
-     */
-    Error: "error",
-    /** Listener: (M3U8DownloadTask, reportStr) => void
-     *
-     * `reportStr`: report in string
-     */
-    Completed: "completed",
-  };
-  //#endregion Class event types
-
-  //#region Class states
-  static States = Object.assign(this.EventTypes, {});
-  //#endregion Class states
-
-  //#region Getter
+  //#region Protected methods
   /**
-   * Getter
+   * Change task's status
    *
-   * Get task status
-   *
-   * @return status
+   * @param {DownloadTask.StateTypes} newStatus new status to change to
+   * @param {()=>void} callback callback that will be called after status have been changed
    */
-  get status() {
-    return this._status;
-  }
+  changeStatus(newStatus, callback = undefined) {
+    const oldStatus = this.#status;
 
-  /**
-   * Getter
-   *
-   * Get task cehckpoint
-   *
-   * @return checkpoint as Object
-   */
-  get checkpoint() {
-    return this._checkpoint ? this._checkpoint : {};
-  }
-  //#endregion Getter
+    this.status = newStatus;
+    this.emit(DownloadTask.EventTypes.StatusChanged, oldStatus, this.status);
 
-  //#region Setter
-  /**
-   * Setter
-   *
-   * Merge checkpoint with given checkpoint object
-   *
-   * @param {Object} newCheckpoint an Object
-   */
-  set checkpoint(newCheckpoint) {
-    if (newCheckpoint.constructor.name !== "Object") {
-      throw new Error(
-        "Fail to set task's checkpoint, checkpoint value must be an Object"
-      );
-    }
-
-    if (newCheckpoint)
-      this._checkpoint = Object.assign(this.checkpoint, newCheckpoint);
+    if (callback) callback();
   }
   /**
-   * Setter for status
+   * Overridable
    *
-   * Also save status to checkpoint
-   *
-   * @param {string} newStatus
+   * Call when start preprocessing
    */
-  set status(newStatus) {
-    this._status = newStatus;
-    this.checkpoint = Object.assign(this.checkpoint, {
-      status: this.status,
-    });
-  }
+  async preProcessing() {}
 
   /**
-   * Setter for progress
+   * Overridable
    *
-   * Save progress to checkpoint
-   *
-   * @param {number} newProgress
+   * Call when start processing
    */
-  set progress(newProgress) {
-    this.checkpoint = Object.assign(this.checkpoint, {
-      progress: newProgress,
-    });
-  }
+  async processing() {}
 
   /**
-   * Setter
+   * Overridable
    *
-   * Save a number of total downloaded files to checkpoint
-   *
-   * @param {number} num
+   * Call when start postprocessing
    */
-  set downloaded(num) {
-    this.checkpoint = Object.assign(this.checkpoint, {
-      downloaded: num,
-    });
-  }
+  async postProcessing() {}
 
   /**
-   * Setter
+   * Overridable
    *
-   * Save a number of total download failed fiels to checkpoint
-   *
-   * @param {number} num
+   * Call after task enter `Start` status
    */
-  set downloadFailed(num) {
-    this.checkpoint = Object.assign(this.checkpoint, {
-      downloadFailed: num,
-    });
-  }
+  async doStart() {}
 
   /**
-   * Setter
+   * Overridable
    *
-   * Save event logs
-   *
-   * @param {[string]} logs
+   * Call before task enter `Canceled` status
    */
-  set eventLogs(logs) {
-    this.checkpoint = Object.assign(this.checkpoint, { eventLogs: logs });
-  }
-  //#endregion Setter
+  async doCancel() {}
 
-  //#region Constructor
   /**
-   * Create a M3U8DownloadTask instance
+   * Overridable
    *
-   * Call `init()` on instance to initialize the task
-   * before using it
-   *
-   * @param {string} taskId id for the task, it will
-   * generate an id for the task if not given
+   * Call after task enter `Pause` status
    */
-  constructor(taskId = undefined) {
-    super(taskId);
-  }
-  //#endregion Constructor
+  async doPause() {}
 
-  //#region Public overrided methods
-  async start() {
-    if (!this.isRunning) this.downloader.download();
-  }
-
-  async pause() {
-    this.downloader.pause();
-  }
-
-  async resume() {
-    this.downloader.resume();
-  }
-
-  async cancel() {
-    this.downloader.cancel();
-  }
-
-  toJson() {
-    const checkPoint = Object.assign(super.toJson(), this.checkpoint);
-    return checkPoint;
-  }
-  //#endregion Public overrided methods
-
-  //#region Public methods
   /**
-   * Initialize download task
+   * Overridable
    *
-   * - Create a task id
-   * - Create a M3U8Downloader instance
-   *
-   * @param {string} m3u8Url url to m3u8 file
-   * @param {string} output output directory for video
-   * @param {string} workingDir task's working directory e.g `./tmp`,
-   * the actual working directory will be `workingDir/{taskId}`
-   * @param {DefaultOptions} options options will passed to M3U8Downloader
-   * @param {string} status task's status only for recovery
-   * @param {string} downloaderStatus downloader's status only for recovery
+   * Call after task enter `Resume` status
    */
-  init(
-    m3u8Url,
-    output,
-    workingDir,
-    options = { convert2Mp4: true },
-    status = undefined,
-    downloaderStatus = undefined
-  ) {
-    this.status = status ? status : M3U8DownloadTask.States.Init;
-    this.emit(M3U8DownloadTask.EventTypes.Init);
+  async doResume() {}
 
-    options = Object.assign(options, {
-      segmentsDir: path.join(workingDir, this.taskId),
-    });
-    this.downloader = new M3U8Downloader(
-      m3u8Url,
-      output,
-      options,
-      downloaderStatus
-    );
-    this.checkpoint = {
-      status: this.status,
-      downloaderStatus: this.downloader.status,
-      m3u8Url,
-      output,
-      workingDir,
-      progress: 0,
-      downloaded: 0,
-      downloadFailed: 0,
-      options: this.downloader.options,
-    };
-    this.registerEventListeners();
-    this.status = M3U8DownloadTask.States.PENDING;
-    this.emit(M3U8DownloadTask.EventTypes.PENDING);
-
-    return this;
-  }
-
-  //#endregion Public methods
-
-  //#region Private methods
-  registerEventListeners() {
-    this.downloader.on(
-      M3U8Downloader.EventTypes.StatusChanged,
-      (oldStatus, newStatus) => {
-        this.checkpoint = Object.assign(this.checkpoint, {
-          downloaderStatus: newStatus,
-        });
-      }
-    );
-    this.downloader.on(M3U8Downloader.EventTypes.Start, () => {
-      this.status = M3U8DownloadTask.States.Begin;
-      this.isRunning = true;
-      this.eventLogs = this.downloader.eventLogs;
-      this.emit(M3U8DownloadTask.EventTypes.Begin, this);
-    });
-    this.downloader.on(M3U8Downloader.EventTypes.Pause, () => {
-      this.status = M3U8DownloadTask.States.Pause;
-      this.isRunning = false;
-      this.eventLogs = this.downloader.eventLogs;
-      this.emit(M3U8DownloadTask.EventTypes.Pause, this);
-    });
-    this.downloader.on(M3U8Downloader.EventTypes.Resume, () => {
-      this.status = M3U8DownloadTask.States.Resume;
-      this.isRunning = true;
-      this.eventLogs = this.downloader.eventLogs;
-      this.emit(M3U8DownloadTask.EventTypes.Resume, this);
-    });
-    this.downloader.on(M3U8Downloader.EventTypes.Canceled, () => {
-      this.status = M3U8DownloadTask.States.Canceled;
-      this.isRunning = false;
-      this.eventLogs = this.downloader.eventLogs;
-      this.emit(M3U8DownloadTask.EventTypes.Canceled, this);
-    });
-    this.downloader.on(M3U8Downloader.EventTypes.Progress, (progress) => {
-      const progressFloat = parseFloat(progress.downloaded / progress.total);
-      const progressDesc = `${parseInt(progressFloat * 100.0)}%`;
-
-      if (this.isRunning) {
-        this.status = M3U8DownloadTask.States.Progress;
-      }
-      this.progress = progressFloat;
-      this.downloaded = this.downloader.downloadedSegments;
-
-      const progressObj = {
-        url: progress.url,
-        filePath: progress.downloadedFile,
-        progress: progressFloat,
-        progressDesc: progressDesc,
-      };
-      this.emit(M3U8DownloadTask.EventTypes.Progress, this, progressObj);
-    });
-    this.downloader.on(M3U8Downloader.EventTypes.BeginMerge, () => {
-      this.status = M3U8DownloadTask.States.MergingFiles;
-      this.eventLogs = this.downloader.eventLogs;
-      this.emit(M3U8DownloadTask.EventTypes.MergingFiles, this);
-    });
-    this.downloader.on(
-      M3U8Downloader.EventTypes.MergeCompleted,
-      (mergedFilePath) => {
-        this.status = M3U8DownloadTask.States.MerginFilesCompleted;
-        this.eventLogs = this.downloader.eventLogs;
-        this.emit(
-          M3U8DownloadTask.EventTypes.MerginFilesCompleted,
-          this,
-          mergedFilePath
-        );
-      }
-    );
-    this.downloader.on(
-      M3U8Downloader.EventTypes.BeginConversion,
-      (inputFilePath) => {
-        this.status = M3U8DownloadTask.States.ConvertingVideo;
-        this.eventLogs = this.downloader.eventLogs;
-        this.emit(
-          M3U8DownloadTask.EventTypes.ConvertingVideo,
-          this,
-          inputFilePath
-        );
-      }
-    );
-    this.downloader.on(
-      M3U8Downloader.EventTypes.ConversionCompleted,
-      (outputFilePath) => {
-        this.status = M3U8DownloadTask.States.ConvertingVideoCompleted;
-        this.eventLogs = this.downloader.eventLogs;
-        this.emit(
-          M3U8DownloadTask.EventTypes.ConvertingVideoCompleted,
-          this,
-          outputFilePath
-        );
-      }
-    );
-    this.downloader.on(M3U8Downloader.EventTypes.Error, (error) => {
-      this.status = M3U8DownloadTask.States.Error;
-      this.downloadFailed = this.downloader.downloadFailedSegments;
-      this.eventLogs = this.downloader.eventLogs;
-      this.emit(M3U8DownloadTask.EventTypes.Error, this, error);
-    });
-    this.downloader.on(M3U8Downloader.EventTypes.Completed, (report) => {
-      this.status = M3U8DownloadTask.States.Completed;
-      this.isRunning = false;
-      this.eventLogs = this.downloader.eventLogs;
-      if (!this.downloader.options.interruptOnError) {
-        this.progress = 1.0;
-      }
-      let jsonString = JSON.stringify(report, null, 4);
-
-      this.emit(M3U8DownloadTask.EventTypes.Completed, this, jsonString);
-    });
-  }
-  //#endregion Private methods
+  /**
+   * Overridable
+   *
+   * Call before task enter `Completed` status
+   */
+  async doComplete() {}
+  //#endregion Protected methods
 }
