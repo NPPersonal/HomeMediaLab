@@ -113,6 +113,10 @@ export class M3U8DownloadTask extends DownloadTask {
     getTaskStateTypes()
   );
 
+  #progress = 0.0;
+  #fileDownload = 0;
+  #fileDownloadFail = 0;
+
   //#region Getter
   get isRunning() {
     if (!this.options.interruptOnError) {
@@ -133,48 +137,67 @@ export class M3U8DownloadTask extends DownloadTask {
     }
   }
 
+  // /**
+  //  * Getter
+  //  *
+  //  * Get task cehckpoint
+  //  *
+  //  * @return checkpoint as Object
+  //  */
+  // get checkpoint() {
+  //   return this._checkpoint ? this._checkpoint : {};
+  // }
+
   /**
    * Getter
    *
-   * Get task cehckpoint
-   *
-   * @return checkpoint as Object
+   * Return task's progress 0 ~ 1
    */
-  get checkpoint() {
-    return this._checkpoint ? this._checkpoint : {};
+  get progress() {
+    return this.#progress;
+  }
+
+  get fileDownload() {
+    return this.#fileDownload;
+  }
+
+  get fileDownloadFail() {
+    return this.#fileDownloadFail;
   }
   //#endregion Getter
 
   //#region Setter
+  // /**
+  //  * Setter
+  //  *
+  //  * Merge checkpoint with given checkpoint object
+  //  *
+  //  * @param {Object} newCheckpoint an Object
+  //  */
+  // set checkpoint(newCheckpoint) {
+  //   if (newCheckpoint.constructor.name !== "Object") {
+  //     throw new Error(
+  //       "Fail to set task's checkpoint, checkpoint value must be an Object"
+  //     );
+  //   }
+
+  //   if (newCheckpoint)
+  //     this._checkpoint = Object.assign(this.checkpoint, newCheckpoint);
+  // }
+
   /**
    * Setter
    *
-   * Merge checkpoint with given checkpoint object
-   *
-   * @param {Object} newCheckpoint an Object
-   */
-  set checkpoint(newCheckpoint) {
-    if (newCheckpoint.constructor.name !== "Object") {
-      throw new Error(
-        "Fail to set task's checkpoint, checkpoint value must be an Object"
-      );
-    }
-
-    if (newCheckpoint)
-      this._checkpoint = Object.assign(this.checkpoint, newCheckpoint);
-  }
-
-  /**
-   * Setter for progress
-   *
-   * Save progress to checkpoint
+   * Set task's progress and clamp value if it is not in 0 ~ 1
    *
    * @param {number} newProgress
    */
   set progress(newProgress) {
-    this.checkpoint = Object.assign(this.checkpoint, {
-      progress: newProgress,
-    });
+    const pClamped = Math.max(0.0, min(newProgress, 1.0));
+    this.#progress = pClamped;
+    // this.checkpoint = Object.assign(this.checkpoint, {
+    //   progress: newProgress,
+    // });
   }
 
   /**
@@ -184,10 +207,11 @@ export class M3U8DownloadTask extends DownloadTask {
    *
    * @param {number} num
    */
-  set downloaded(num) {
-    this.checkpoint = Object.assign(this.checkpoint, {
-      downloaded: num,
-    });
+  set fileDownload(num) {
+    this.#fileDownload = num;
+    // this.checkpoint = Object.assign(this.checkpoint, {
+    //   downloaded: num,
+    // });
   }
 
   /**
@@ -197,10 +221,11 @@ export class M3U8DownloadTask extends DownloadTask {
    *
    * @param {number} num
    */
-  set downloadFailed(num) {
-    this.checkpoint = Object.assign(this.checkpoint, {
-      downloadFailed: num,
-    });
+  set fileDownloadFail(num) {
+    this.#fileDownloadFail = num;
+    // this.checkpoint = Object.assign(this.checkpoint, {
+    //   downloadFailed: num,
+    // });
   }
 
   //#endregion Setter
@@ -213,10 +238,13 @@ export class M3U8DownloadTask extends DownloadTask {
 
   //#region Public overrided methods
 
-  toJson() {
-    const checkPoint = Object.assign(super.toJson(), this.checkpoint);
-    return checkPoint;
-  }
+  // toJson() {
+  //   const checkPoint = Object.assign(super.toJson(), this.checkpoint);
+  //   return checkPoint;
+  // }
+  serialize() {}
+
+  deserialize() {}
   //#endregion Public overrided methods
 
   //#region Public methods
@@ -262,17 +290,17 @@ export class M3U8DownloadTask extends DownloadTask {
       retryDelay: axiosRetry.exponentialDelay,
     });
 
-    this.checkpoint = {
-      status: this.status,
-      downloaderStatus: this.downloader.status,
-      m3u8Url,
-      output,
-      workingDir,
-      progress: 0,
-      downloaded: 0,
-      downloadFailed: 0,
-      options: this.downloader.options,
-    };
+    // this.checkpoint = {
+    //   status: this.status,
+    //   downloaderStatus: this.downloader.status,
+    //   m3u8Url,
+    //   output,
+    //   workingDir,
+    //   progress: 0,
+    //   downloaded: 0,
+    //   downloadFailed: 0,
+    //   options: this.downloader.options,
+    // };
 
     this.registerEventListeners();
 
@@ -521,31 +549,26 @@ export class M3U8DownloadTask extends DownloadTask {
 
     // If segment file exists and don't override it
     if (this.options.skipExistSegments && (await fs.pathExists(segmentPath))) {
+      if (!this.downloadedFiles.includes(segmentPath))
+        this.downloadedFiles.push(segmentPath);
       this.downloadedSegments++;
-      const progress = Object.assign(DefaultProgress, {
-        url: tsUrl,
-        downloadedFile: segmentPath,
-        downloaded: this.downloadedSegments,
-        total: this.totalSegments,
+    } else {
+      // Download the segment
+      const response = await axios.get(tsUrl, {
+        responseType: "arraybuffer",
+        headers: {
+          "user-agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+          ...this.options.headers,
+        },
       });
-      this.emit(M3U8DownloadTask.EventTypes.Progress, this, progress);
-      return progress;
+
+      // Write the segment file to the path
+      await fs.writeFile(segmentPath, response.data);
+      this.downloadedFiles.push(segmentPath);
+      this.downloadedSegments++;
     }
 
-    // Download the segment
-    const response = await axios.get(tsUrl, {
-      responseType: "arraybuffer",
-      headers: {
-        "user-agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
-        ...this.options.headers,
-      },
-    });
-
-    // Write the segment file to the path
-    await fs.writeFile(segmentPath, response.data);
-    this.downloadedFiles.push(segmentPath);
-    this.downloadedSegments++;
     const progress = Object.assign(DefaultProgress, {
       url: tsUrl,
       downloadedFile: segmentPath,
@@ -701,4 +724,48 @@ export class M3U8DownloadTask extends DownloadTask {
     }
   }
   //#endregion Private util methods
+
+  //#region Private methods
+  registerEventListeners() {
+    this.on(M3U8DownloadTask.EventTypes.Progress, (task, progress) => {
+      const progressFloat = parseFloat(progress.downloaded / progress.total);
+      this.progress = progressFloat;
+    });
+    this.downloader.on(M3U8Downloader.EventTypes.Progress, (progress) => {
+      const progressFloat = parseFloat(progress.downloaded / progress.total);
+      const progressDesc = `${parseInt(progressFloat * 100.0)}%`;
+
+      if (this.isRunning) {
+        this.status = M3U8DownloadTask.States.Progress;
+      }
+      this.progress = progressFloat;
+      this.downloaded = this.downloader.downloadedSegments;
+
+      const progressObj = {
+        url: progress.url,
+        filePath: progress.downloadedFile,
+        progress: progressFloat,
+        progressDesc: progressDesc,
+      };
+      this.emit(M3U8DownloadTask.EventTypes.Progress, this, progressObj);
+    });
+    this.downloader.on(M3U8Downloader.EventTypes.Error, (error) => {
+      this.status = M3U8DownloadTask.States.Error;
+      this.downloadFailed = this.downloader.downloadFailedSegments;
+      this.eventLogs = this.downloader.eventLogs;
+      this.emit(M3U8DownloadTask.EventTypes.Error, this, error);
+    });
+    this.downloader.on(M3U8Downloader.EventTypes.Completed, (report) => {
+      this.status = M3U8DownloadTask.States.Completed;
+      this.isRunning = false;
+      this.eventLogs = this.downloader.eventLogs;
+      if (!this.downloader.options.interruptOnError) {
+        this.progress = 1.0;
+      }
+      let jsonString = JSON.stringify(report, null, 4);
+
+      this.emit(M3U8DownloadTask.EventTypes.Completed, this, jsonString);
+    });
+  }
+  //#endregion Private methods
 }

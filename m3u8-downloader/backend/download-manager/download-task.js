@@ -267,6 +267,9 @@ export class DownloadTask extends EventEmitter {
     this.#eventLogs.push(log);
     return log;
   }
+
+  serialize() {}
+  deserialize(data) {}
   //#endregion Public methods
 
   //#region Protected methods
