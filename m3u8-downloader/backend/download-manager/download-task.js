@@ -2,12 +2,10 @@ import EventEmitter from "eventemitter3";
 import { v4 as uuidv4 } from "uuid";
 import { dateTimeLog } from "./libs/utils.js";
 
-const getTaskEventTypes = () => {
+export const getTaskEventTypes = () => {
   return {
     /** (task)=>void */
     Init: "init",
-    /** (task)=>void */
-    Pending: "pending",
     /** (task)=>void */
     Start: "start",
     /** (task)=>void */
@@ -31,7 +29,7 @@ const getTaskEventTypes = () => {
   };
 };
 
-const getTaskStateTypes = () => {
+export const getTaskStateTypes = () => {
   const states = Object.assign({ Unknown: "unknown" }, getTaskEventTypes());
   delete states.StatusChanged;
   return states;
@@ -154,11 +152,6 @@ export class DownloadTask extends EventEmitter {
       this.#taskId = taskId;
     }
 
-    this.changeStatus(DownloadTask.StateTypes.Pending, () => {
-      this.addEventLog("Task pending");
-      this.emit(DownloadTask.EventTypes.Pending, this);
-    });
-
     return this;
   }
 
@@ -178,19 +171,19 @@ export class DownloadTask extends EventEmitter {
           this.addEventLog("Pre Proccessing");
           this.emit(DownloadTask.EventTypes.PreProcessing, this);
         });
-        await this.preProcessing();
+        await this.doPreProcessing();
 
         this.changeStatus(DownloadTask.StateTypes.Downloading, () => {
           this.addEventLog("Downloading");
           this.emit(DownloadTask.EventTypes.Downloading, this);
         });
-        await this.processing();
+        await this.doProcessing();
 
         this.changeStatus(DownloadTask.StateTypes.PostProcessing, () => {
           this.addEventLog("Post processing");
           this.emit(DownloadTask.EventTypes.PostProcessing, this);
         });
-        await this.postProcessing();
+        await this.doPostProcessing();
 
         await this.doComplete();
         this.changeStatus(DownloadTask.StateTypes.Completed, () => {
@@ -220,7 +213,7 @@ export class DownloadTask extends EventEmitter {
       this.addEventLog("Pause");
       this.emit(DownloadTask.EventTypes.Pause, this);
     });
-    this.doPause();
+    await this.doPause();
   }
 
   /**
@@ -233,14 +226,22 @@ export class DownloadTask extends EventEmitter {
       this.addEventLog("Resume");
       this.emit(DownloadTask.EventTypes.Resume, this);
     });
-    this.doResume();
+    await this.doResume();
   }
 
   /**
    * Cancel the task
    */
   async cancel() {
-    this.doCancel();
+    if (
+      [
+        DownloadTask.StateTypes.Completed,
+        DownloadTask.StateTypes.Canceled,
+      ].includes(this.status)
+    )
+      return;
+
+    await this.doCancel();
     this.changeStatus(DownloadTask.StateTypes.Canceled, () => {
       this.addEventLog("Canceled");
       this.emit(DownloadTask.EventTypes.Canceled, this);
@@ -288,21 +289,21 @@ export class DownloadTask extends EventEmitter {
    *
    * Call when start preprocessing
    */
-  async preProcessing() {}
+  async doPreProcessing() {}
 
   /**
    * Overridable
    *
    * Call when start processing
    */
-  async processing() {}
+  async doProcessing() {}
 
   /**
    * Overridable
    *
    * Call when start postprocessing
    */
-  async postProcessing() {}
+  async doPostProcessing() {}
 
   /**
    * Overridable

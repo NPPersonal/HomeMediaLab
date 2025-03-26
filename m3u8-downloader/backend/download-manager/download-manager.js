@@ -1,6 +1,6 @@
 import fs from "fs-extra";
 import { Observable } from "object-observer";
-import { M3U8DownloadTask } from "./download-task.js";
+import { M3U8DownloadTask } from "./tasks/m3u8-download-task.js";
 import EventEmitter from "eventemitter3";
 
 const DATA_FILE_PATH = "task-checkpoints.json";
@@ -501,7 +501,7 @@ export default class DownloadManager extends EventEmitter {
   }
 
   registerListenerToTask(downloadTask) {
-    downloadTask.on(M3U8DownloadTask.EventTypes.Begin, (task) => {
+    downloadTask.on(M3U8DownloadTask.EventTypes.Start, (task) => {
       console.log(`Downloader begin ${task.taskId}`);
       this.queueTaskUpdated(task);
     });
@@ -531,42 +531,17 @@ export default class DownloadManager extends EventEmitter {
       this.queueTaskUpdated(task);
     });
 
-    downloadTask.on(M3U8DownloadTask.EventTypes.MergingFiles, (task) => {
-      console.log(`Download task ${task.taskId} begin merging video segments`);
+    downloadTask.on(M3U8DownloadTask.EventTypes.Merging, (task) => {
+      console.log(`Download task ${task.taskId} merging video segments`);
       this.queueTaskUpdated(task);
     });
 
-    downloadTask.on(
-      M3U8DownloadTask.EventTypes.MerginFilesCompleted,
-      (task) => {
-        console.log(
-          `Download task ${task.taskId} merging video segments completed`
-        );
-        this.queueTaskUpdated(task);
-      }
-    );
+    downloadTask.on(M3U8DownloadTask.EventTypes.Converting, (task) => {
+      console.log(`Download task ${task.taskId} converting video file`);
+      this.queueTaskUpdated(task);
+    });
 
-    downloadTask.on(
-      M3U8DownloadTask.EventTypes.ConvertingVideo,
-      (task, inputFilePath) => {
-        console.log(
-          `Download task ${task.taskId} converting video file ${inputFilePath}`
-        );
-        this.queueTaskUpdated(task);
-      }
-    );
-
-    downloadTask.on(
-      M3U8DownloadTask.EventTypes.ConvertingVideoCompleted,
-      (task, outputFilePath) => {
-        console.log(
-          `Download task ${task.taskId} converting video file completed ${outputFilePath}`
-        );
-        this.queueTaskUpdated(task);
-      }
-    );
-
-    downloadTask.on(M3U8DownloadTask.EventTypes.Completed, (task, report) => {
+    downloadTask.on(M3U8DownloadTask.EventTypes.Completed, (task) => {
       console.log(`Download task ${task.taskId} completed`);
       this.queueMoveTaskToCompleted(task);
     });
