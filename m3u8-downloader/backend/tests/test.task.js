@@ -23,7 +23,7 @@ const listenTaskEvents = (task) => {
   });
 
   task.on(M3U8DownloadTask.EventTypes.Progress, (task, progress) => {
-    console.log(`\rprogress: ${progress.downloaded / progress.total}`);
+    // console.log(`\rprogress: ${progress.downloaded / progress.total}`);
   });
 
   task.on(M3U8DownloadTask.EventTypes.Merging, (task) => {
@@ -55,8 +55,8 @@ listenTaskEvents(task);
 /**
  * simulate download task
  */
-// await task.start();
-// console.log(task.serializeToJSON);
+await task.start();
+console.log(task.serializeToJSON);
 
 /**
  * simulate pause then resume along with serialize from
@@ -81,8 +81,8 @@ listenTaskEvents(task);
 /**
  * simulate cancel task
  */
-task.start();
-setTimeout(async () => {
-  await task.cancel();
-  console.log(task.serializeToJSON());
-}, 15000);
+// task.start();
+// setTimeout(async () => {
+//   await task.cancel();
+//   console.log(task.serializeToJSON());
+// }, 10000);

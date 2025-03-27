@@ -88,6 +88,13 @@ export class DownloadTask extends EventEmitter {
    * Return true if task is running otherwise false
    */
   get isRunning() {
+    if (
+      this.stateStack.includes(DownloadTask.StateTypes.Completed) ||
+      this.stateStack.includes(DownloadTask.StateTypes.Canceled)
+    ) {
+      return false;
+    }
+
     return (
       this.status === DownloadTask.StateTypes.Start ||
       this.status === DownloadTask.StateTypes.Resume ||
@@ -104,6 +111,14 @@ export class DownloadTask extends EventEmitter {
   get evenLogs() {
     return this._eventLogs;
   }
+
+  /**
+   *
+   * Return state stack
+   */
+  get stateStack() {
+    return this._stateStack;
+  }
   //#endregion Getter Setter
 
   //#endregion Setter
@@ -115,6 +130,7 @@ export class DownloadTask extends EventEmitter {
     this._taskId = undefined;
     this._status = DownloadTask.StateTypes.Unknown;
     this._eventLogs = [];
+    this._stateStack = [];
   }
 
   //#endregion Constructor
@@ -154,29 +170,33 @@ export class DownloadTask extends EventEmitter {
         });
         await this.doStart();
 
+        if (!this.isRunning) return;
         this.changeStatus(DownloadTask.StateTypes.PreProcessing, () => {
           this.addEventLog("Pre Proccessing");
           this.emit(DownloadTask.EventTypes.PreProcessing, this);
         });
         await this.doPreProcessing();
 
+        if (!this.isRunning) return;
         this.changeStatus(DownloadTask.StateTypes.Downloading, () => {
           this.addEventLog("Downloading");
           this.emit(DownloadTask.EventTypes.Downloading, this);
         });
         await this.doProcessing();
 
+        if (!this.isRunning) return;
         this.changeStatus(DownloadTask.StateTypes.PostProcessing, () => {
           this.addEventLog("Post processing");
           this.emit(DownloadTask.EventTypes.PostProcessing, this);
         });
         await this.doPostProcessing();
 
-        await this.doComplete();
+        if (!this.isRunning) return;
         this.changeStatus(DownloadTask.StateTypes.Completed, () => {
           this.addEventLog("Task completed");
           this.emit(DownloadTask.EventTypes.Completed, this);
         });
+        await this.doComplete();
       } else {
         console.warn(
           `Unable to start task as it is running, status: ${this.status}`
@@ -281,6 +301,13 @@ export class DownloadTask extends EventEmitter {
     const oldStatus = this.status;
 
     this.status = newStatus;
+
+    if (this._stateStack.length === 0) {
+      this._stateStack.push(this.status);
+    } else if (this._stateStack[this.stateStack.length - 1] !== this.status) {
+      this._stateStack.push(this.status);
+    }
+
     this.emit(DownloadTask.EventTypes.StatusChanged, oldStatus, this.status);
 
     if (callback) callback();
@@ -289,21 +316,21 @@ export class DownloadTask extends EventEmitter {
   /**
    * Overridable
    *
-   * Call when start preprocessing
+   * Call after task enter `PreProcessing` status
    */
   async doPreProcessing() {}
 
   /**
    * Overridable
    *
-   * Call when start processing
+   * Call after task enter `Processing` status
    */
   async doProcessing() {}
 
   /**
    * Overridable
    *
-   * Call when start postprocessing
+   * Call after task enter `PostProcessing` status
    */
   async doPostProcessing() {}
 
@@ -317,7 +344,7 @@ export class DownloadTask extends EventEmitter {
   /**
    * Overridable
    *
-   * Call before task enter `Canceled` status
+   * Call after task enter `Canceled` status
    */
   async doCancel() {}
 
@@ -338,7 +365,7 @@ export class DownloadTask extends EventEmitter {
   /**
    * Overridable
    *
-   * Call before task enter `Completed` status
+   * Call after task enter `Completed` status
    */
   async doComplete() {}
   //#endregion Protected methods

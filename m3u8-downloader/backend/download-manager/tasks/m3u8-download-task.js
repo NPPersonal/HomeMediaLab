@@ -124,6 +124,13 @@ export class M3U8DownloadTask extends DownloadTask {
    * Overrided from parent class
    */
   get isRunning() {
+    if (
+      this.stateStack.includes(DownloadTask.StateTypes.Completed) ||
+      this.stateStack.includes(DownloadTask.StateTypes.Canceled)
+    ) {
+      return false;
+    }
+
     let filterStates = [
       M3U8DownloadTask.StateTypes.Start,
       M3U8DownloadTask.StateTypes.Resume,
@@ -326,6 +333,7 @@ export class M3U8DownloadTask extends DownloadTask {
 
   async doCancel() {
     this.queue.clear();
+    await this.cleanUpDownloadedFiles();
   }
 
   async doPreProcessing() {
@@ -519,11 +527,7 @@ export class M3U8DownloadTask extends DownloadTask {
   async downloadTsSegments(tsUrls) {
     for (const [index, tsUrl] of tsUrls.entries()) {
       this.queue
-        .add(async () => {
-          const p = await this.downloadSegment(tsUrl, index);
-          this.fileDownload += 1;
-          this.emit(M3U8DownloadTask.EventTypes.Progress, this, p);
-        })
+        .add(() => this.downloadSegment(tsUrl, index))
         .catch((error) => {
           this.downloadFailedSegments++;
           this.changeStatus(DownloadTask.StateTypes.Error, () => {
@@ -576,6 +580,7 @@ export class M3U8DownloadTask extends DownloadTask {
         },
       });
 
+      if (!this.isRunning) return;
       // Write the segment file to the path
       await fs.writeFile(segmentPath, response.data);
       this.downloadedFiles.push(segmentPath);
@@ -588,6 +593,9 @@ export class M3U8DownloadTask extends DownloadTask {
       downloaded: this.downloadedSegments,
       total: this.totalSegments,
     });
+
+    this.fileDownload += 1;
+    this.emit(M3U8DownloadTask.EventTypes.Progress, this, progress);
 
     return progress;
   }
