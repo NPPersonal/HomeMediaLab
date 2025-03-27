@@ -16,8 +16,8 @@ import {
   getBaseURL,
   combineURL,
 } from "../libs/utils.js";
-
 import os from "node:os";
+
 export const DefaultOptions = {
   /** How many concurrent download to run */
   concurrency: 5,
@@ -64,6 +64,8 @@ export const DefaultProgress = {
   /** Total segmetns to be downloaded */
   total: 0,
 };
+
+const SUPPORT_OUTPUT_FILE_TYPES = [".mp4"];
 
 /**
  * M3U8DownloadTask is inherited from `DownloadTask` class.
@@ -115,26 +117,32 @@ export class M3U8DownloadTask extends DownloadTask {
   );
 
   //#region Getter Setter
+  /**
+   *
+   * Is this task running?
+   *
+   * Overrided from parent class
+   */
   get isRunning() {
+    let filterStates = [
+      M3U8DownloadTask.StateTypes.Start,
+      M3U8DownloadTask.StateTypes.Resume,
+      M3U8DownloadTask.StateTypes.PreProcessing,
+      M3U8DownloadTask.StateTypes.Downloading,
+      M3U8DownloadTask.StateTypes.PostProcessing,
+      M3U8DownloadTask.StateTypes.Merging,
+      M3U8DownloadTask.StateTypes.Converting,
+    ];
+
     if (!this.options.interruptOnError) {
-      return (
-        this.status === DownloadTask.StateTypes.Start ||
-        this.status === DownloadTask.StateTypes.Resume ||
-        this.status === DownloadTask.StateTypes.PreProcessing ||
-        this.status === DownloadTask.StateTypes.Downloading ||
-        this.status === DownloadTask.StateTypes.PostProcessing ||
-        this.status === DownloadTask.StateTypes.Error
-      );
-    } else {
-      this.status === DownloadTask.StateTypes.Start ||
-        this.status === DownloadTask.StateTypes.Resume ||
-        this.status === DownloadTask.StateTypes.PreProcessing ||
-        this.status === DownloadTask.StateTypes.Downloading ||
-        this.status === DownloadTask.StateTypes.PostProcessing;
+      filterStates = [...filterStates, M3U8DownloadTask.StateTypes.Error];
     }
+
+    return filterStates.includes(this.status);
   }
 
   /**
+   *
    * Return task's progress 0 ~ 1
    */
   get progress() {
@@ -142,21 +150,30 @@ export class M3U8DownloadTask extends DownloadTask {
   }
 
   /**
-   * Set task's progress and clamp value if it is not in 0 ~ 1
    *
-   * @param {number} newProgress
+   * Set task's progress
+   *
+   * @param {number} newProgress progress value between 0 ~ 1
+   * clamp value if it is not in 0 ~ 1
    */
   set progress(newProgress) {
-    const pClamped = Math.max(0.0, min(newProgress, 1.0));
+    const pClamped = Math.max(0.0, Math.min(newProgress, 1.0));
     this._progress = pClamped;
   }
 
+  /**
+   *
+   * Return how many video segment file has been downloaded
+   * successful
+   */
   get fileDownload() {
     return this._fileDownload;
   }
 
   /**
-   * Save a number of total downloaded files to checkpoint
+   *
+   * Set how many video segment file has been downloaded
+   * successful
    *
    * @param {number} num
    */
@@ -164,14 +181,17 @@ export class M3U8DownloadTask extends DownloadTask {
     this._fileDownload = num;
   }
 
+  /**
+   *
+   * Return how many video segment file failed to be downloaded
+   */
   get fileDownloadFail() {
     return this._fileDownloadFail;
   }
 
   /**
-   * Setter
    *
-   * Save a number of total download failed fiels to checkpoint
+   * Set how many video segment file failed to be downloaded
    *
    * @param {number} num
    */
@@ -188,14 +208,30 @@ export class M3U8DownloadTask extends DownloadTask {
     this._fileDownload = 0;
     this._fileDownloadFail = 0;
     this.queue = new PQueue();
+
+    this.registerEventListeners();
   }
   //#endregion Constructor
 
   //#region Public overrided methods
 
-  serialize() {}
+  serializeToJSON() {
+    const jsonData = {};
+    const filters = ["_events", "_eventsCount"];
 
-  deserialize() {}
+    Object.getOwnPropertyNames(this).forEach((key) => {
+      if (!filters.includes(key)) jsonData[key] = this[key];
+    });
+
+    return jsonData;
+  }
+
+  static deserializeFromJSON(jsonData) {
+    return Object.create(
+      M3U8DownloadTask.prototype,
+      Object.getOwnPropertyDescriptors(jsonData)
+    );
+  }
   //#endregion Public overrided methods
 
   //#region Public methods
@@ -227,7 +263,7 @@ export class M3U8DownloadTask extends DownloadTask {
     // default to m3u8Url but need to be changed when m3u8Url to m3u8 file
     // contain other playlists
     this.playlistUrl = this.m3u8Url;
-    this.output = output;
+    this.output = path.resolve(output);
     this.segmentsDir = this.options.segmentsDir;
     this.queue.concurrency = this.options.concurrency;
     this.totalSegments = 0;
@@ -240,20 +276,6 @@ export class M3U8DownloadTask extends DownloadTask {
       retries: this.options.retries,
       retryDelay: axiosRetry.exponentialDelay,
     });
-
-    // this.checkpoint = {
-    //   status: this.status,
-    //   downloaderStatus: this.downloader.status,
-    //   m3u8Url,
-    //   output,
-    //   workingDir,
-    //   progress: 0,
-    //   downloaded: 0,
-    //   downloadFailed: 0,
-    //   options: this.downloader.options,
-    // };
-
-    this.registerEventListeners();
 
     return this;
   }
@@ -463,17 +485,23 @@ export class M3U8DownloadTask extends DownloadTask {
   async downloadTsSegments(tsUrls) {
     for (const [index, tsUrl] of tsUrls.entries()) {
       this.queue
-        .add(() => this.downloadSegment(tsUrl, index))
+        .add(async () => {
+          const p = await this.downloadSegment(tsUrl, index);
+          this.fileDownload += 1;
+          this.emit(M3U8DownloadTask.EventTypes.Progress, this, p);
+        })
         .catch((error) => {
           this.downloadFailedSegments++;
-          this.changeStatus(DownloadTask.StateTypes.Error, () =>
+          this.changeStatus(DownloadTask.StateTypes.Error, () => {
+            this.fileDownloadFail += 1;
             this.emit(
               DownloadTask.EventTypes.Error,
+              this,
               new Error(
                 `Failed to download segment ${index}\nurl: ${tsUrl} \nreason: ${error}\n`
               )
-            )
-          );
+            );
+          });
         });
     }
 
@@ -526,7 +554,6 @@ export class M3U8DownloadTask extends DownloadTask {
       downloaded: this.downloadedSegments,
       total: this.totalSegments,
     });
-    this.emit(M3U8DownloadTask.EventTypes.Progress, this, progress);
 
     return progress;
   }
@@ -579,6 +606,7 @@ export class M3U8DownloadTask extends DownloadTask {
         this.changeStatus(DownloadTask.StateTypes.Error, () =>
           this.emit(
             DownloadTask.EventTypes.Error,
+            this,
             new Error(
               `Segment ${index} is missing\nExpected file at path: ${segmentPath}\n${error}\n`
             )
@@ -630,6 +658,7 @@ export class M3U8DownloadTask extends DownloadTask {
         this.changeStatus(DownloadTask.StateTypes.Error, () =>
           this.emit(
             DownloadTask.EventTypes.Error,
+            this,
             `Failed to convert to MP4: ${error.message}`
           )
         );
@@ -641,6 +670,7 @@ export class M3U8DownloadTask extends DownloadTask {
           this.changeStatus(DownloadTask.StateTypes.Error, () =>
             this.emit(
               DownloadTask.EventTypes.Error,
+              this,
               `FFmpeg process exited with code ${code}`
             )
           );
@@ -682,40 +712,10 @@ export class M3U8DownloadTask extends DownloadTask {
       const progressFloat = parseFloat(progress.downloaded / progress.total);
       this.progress = progressFloat;
     });
-    this.downloader.on(M3U8Downloader.EventTypes.Progress, (progress) => {
-      const progressFloat = parseFloat(progress.downloaded / progress.total);
-      const progressDesc = `${parseInt(progressFloat * 100.0)}%`;
-
-      if (this.isRunning) {
-        this.status = M3U8DownloadTask.States.Progress;
-      }
-      this.progress = progressFloat;
-      this.downloaded = this.downloader.downloadedSegments;
-
-      const progressObj = {
-        url: progress.url,
-        filePath: progress.downloadedFile,
-        progress: progressFloat,
-        progressDesc: progressDesc,
-      };
-      this.emit(M3U8DownloadTask.EventTypes.Progress, this, progressObj);
-    });
-    this.downloader.on(M3U8Downloader.EventTypes.Error, (error) => {
-      this.status = M3U8DownloadTask.States.Error;
-      this.downloadFailed = this.downloader.downloadFailedSegments;
-      this.eventLogs = this.downloader.eventLogs;
-      this.emit(M3U8DownloadTask.EventTypes.Error, this, error);
-    });
-    this.downloader.on(M3U8Downloader.EventTypes.Completed, (report) => {
-      this.status = M3U8DownloadTask.States.Completed;
-      this.isRunning = false;
-      this.eventLogs = this.downloader.eventLogs;
-      if (!this.downloader.options.interruptOnError) {
+    this.on(M3U8DownloadTask.EventTypes.Completed, (task) => {
+      if (!this.options.interruptOnError) {
         this.progress = 1.0;
       }
-      let jsonString = JSON.stringify(report, null, 4);
-
-      this.emit(M3U8DownloadTask.EventTypes.Completed, this, jsonString);
     });
   }
   //#endregion Private methods

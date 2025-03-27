@@ -52,6 +52,7 @@ export class DownloadTask extends EventEmitter {
 
   //#region Getter Setter
   /**
+   *
    * Return this task's id
    */
   get taskId() {
@@ -59,6 +60,7 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
+   *
    * Set task id
    */
   set taskId(id) {
@@ -66,6 +68,7 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
+   *
    * Return task's status
    */
   get status() {
@@ -73,6 +76,7 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
+   *
    * Set task status
    */
   set status(newStatus) {
@@ -80,6 +84,7 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
+   *
    * Return true if task is running otherwise false
    */
   get isRunning() {
@@ -93,6 +98,7 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
+   *
    * Return event logs as array
    */
   get evenLogs() {
@@ -173,6 +179,7 @@ export class DownloadTask extends EventEmitter {
       }
     } catch (error) {
       this.changeStatus(DownloadTask.StateTypes.Error, () => {
+        console.log(error);
         this.addEventLog(`Error: ${error.message}`);
         this.emit(
           DownloadTask.EventTypes.Error,
@@ -240,8 +247,22 @@ export class DownloadTask extends EventEmitter {
     return log;
   }
 
-  serialize() {}
-  deserialize(data) {}
+  serializeToJSON() {
+    const jsonData = {};
+
+    Object.getOwnPropertyNames(this).forEach((key) => {
+      jsonData[key] = this[key];
+    });
+
+    return jsonData;
+  }
+
+  static deserializeFromJSON(jsonData) {
+    return Object.create(
+      DownloadTask.prototype,
+      Object.getOwnPropertyDescriptors(jsonData)
+    );
+  }
   //#endregion Public methods
 
   //#region Protected methods

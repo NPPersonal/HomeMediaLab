@@ -1,3 +1,5 @@
+import path from "node:path";
+
 /**
  * Check if it is url
  *
