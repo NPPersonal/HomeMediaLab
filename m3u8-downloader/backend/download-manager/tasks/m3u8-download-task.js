@@ -217,7 +217,15 @@ export class M3U8DownloadTask extends DownloadTask {
 
   serializeToJSON() {
     const jsonData = {};
-    const filters = ["_events", "_eventsCount"];
+    const filters = [
+      "_events",
+      "_eventsCount",
+      "queue",
+      "_fileDownload",
+      "_fileDownloadFail",
+      "urls",
+      "downloadedFiles",
+    ];
 
     Object.getOwnPropertyNames(this).forEach((key) => {
       if (!filters.includes(key)) jsonData[key] = this[key];
@@ -227,10 +235,22 @@ export class M3U8DownloadTask extends DownloadTask {
   }
 
   static deserializeFromJSON(jsonData) {
-    return Object.create(
-      M3U8DownloadTask.prototype,
-      Object.getOwnPropertyDescriptors(jsonData)
+    const task = new M3U8DownloadTask();
+
+    task.init(
+      jsonData.m3u8Url,
+      jsonData.output,
+      jsonData.workingDir,
+      jsonData._taskId,
+      jsonData.options
     );
+
+    Object.keys(jsonData).forEach((key) => {
+      if (key in task) {
+        task[key] = jsonData[key];
+      }
+    });
+    return task;
   }
   //#endregion Public overrided methods
 
@@ -249,21 +269,29 @@ export class M3U8DownloadTask extends DownloadTask {
    * @param {string} status task's status only for recovery
    * @param {string} downloaderStatus downloader's status only for recovery
    */
-  init(m3u8Url, output, workingDir, options = DefaultOptions) {
-    super.init();
+  init(
+    m3u8Url,
+    output,
+    workingDir,
+    taskId = undefined,
+    options = DefaultOptions
+  ) {
+    super.init(taskId);
 
+    this.m3u8Url = m3u8Url;
+    this.workingDir = workingDir;
+    this.output = path.resolve(output);
     this.options = Object.assign(
       { ...DefaultOptions, ...options },
       {
         segmentsDir: path.join(workingDir, this.taskId),
       }
     );
-    this.m3u8Url = m3u8Url;
+
     // The playlistUrl is used to fetch playlist's segments,
     // default to m3u8Url but need to be changed when m3u8Url to m3u8 file
     // contain other playlists
     this.playlistUrl = this.m3u8Url;
-    this.output = path.resolve(output);
     this.segmentsDir = this.options.segmentsDir;
     this.queue.concurrency = this.options.concurrency;
     this.totalSegments = 0;
@@ -301,6 +329,8 @@ export class M3U8DownloadTask extends DownloadTask {
   }
 
   async doPreProcessing() {
+    if (!this.isRunning) return;
+
     // Make directory for download segments if it doesn't exists
     if (!(await fs.pathExists(this.segmentsDir))) {
       await fs.mkdir(this.segmentsDir, { recursive: true });
@@ -333,11 +363,15 @@ export class M3U8DownloadTask extends DownloadTask {
   }
 
   async doProcessing() {
+    if (!this.isRunning) return;
+
     // Download .ts files
     await this.downloadTsSegments(this.urls);
   }
 
   async doPostProcessing() {
+    if (!this.isRunning) return;
+
     // If downloaded .ts files need to be merged
     if (this.options.mergeSegments) {
       const tsMediaPath = await this.mergeTsSegments(

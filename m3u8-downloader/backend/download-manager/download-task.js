@@ -146,7 +146,8 @@ export class DownloadTask extends EventEmitter {
    */
   async start() {
     try {
-      if (!this.isRunning) {
+      //start only when task is not running or in Resume status
+      if (!this.isRunning || this.status === DownloadTask.StateTypes.Resume) {
         this.changeStatus(DownloadTask.StateTypes.Start, () => {
           this.addEventLog("Start");
           this.emit(DownloadTask.EventTypes.Start, this);
@@ -176,6 +177,10 @@ export class DownloadTask extends EventEmitter {
           this.addEventLog("Task completed");
           this.emit(DownloadTask.EventTypes.Completed, this);
         });
+      } else {
+        console.warn(
+          `Unable to start task as it is running, status: ${this.status}`
+        );
       }
     } catch (error) {
       this.changeStatus(DownloadTask.StateTypes.Error, () => {
@@ -191,7 +196,7 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
-   * Pause the task
+   * Pause the task asynchronously
    */
   async pause() {
     if (!this.isRunning) return;
@@ -204,7 +209,7 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
-   * Resume the task
+   * Resume the task asynchronously
    */
   async resume() {
     if (this.status !== DownloadTask.StateTypes.Pause) return;
@@ -217,7 +222,7 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
-   * Cancel the task
+   * Cancel the task asynchronously
    */
   async cancel() {
     if (
@@ -228,11 +233,11 @@ export class DownloadTask extends EventEmitter {
     )
       return;
 
-    await this.doCancel();
     this.changeStatus(DownloadTask.StateTypes.Canceled, () => {
       this.addEventLog("Canceled");
       this.emit(DownloadTask.EventTypes.Canceled, this);
     });
+    await this.doCancel();
   }
 
   /**
