@@ -108,16 +108,13 @@ export class M3U8DownloadTask extends DownloadTask {
     },
     getTaskEventTypes()
   );
+
   static StateTypes = Object.assign(
     { Merging: "merging", Converting: "converting" },
     getTaskStateTypes()
   );
 
-  #progress = 0.0;
-  #fileDownload = 0;
-  #fileDownloadFail = 0;
-
-  //#region Getter
+  //#region Getter Setter
   get isRunning() {
     if (!this.options.interruptOnError) {
       return (
@@ -137,81 +134,38 @@ export class M3U8DownloadTask extends DownloadTask {
     }
   }
 
-  // /**
-  //  * Getter
-  //  *
-  //  * Get task cehckpoint
-  //  *
-  //  * @return checkpoint as Object
-  //  */
-  // get checkpoint() {
-  //   return this._checkpoint ? this._checkpoint : {};
-  // }
-
   /**
-   * Getter
-   *
    * Return task's progress 0 ~ 1
    */
   get progress() {
-    return this.#progress;
+    return this._progress;
   }
-
-  get fileDownload() {
-    return this.#fileDownload;
-  }
-
-  get fileDownloadFail() {
-    return this.#fileDownloadFail;
-  }
-  //#endregion Getter
-
-  //#region Setter
-  // /**
-  //  * Setter
-  //  *
-  //  * Merge checkpoint with given checkpoint object
-  //  *
-  //  * @param {Object} newCheckpoint an Object
-  //  */
-  // set checkpoint(newCheckpoint) {
-  //   if (newCheckpoint.constructor.name !== "Object") {
-  //     throw new Error(
-  //       "Fail to set task's checkpoint, checkpoint value must be an Object"
-  //     );
-  //   }
-
-  //   if (newCheckpoint)
-  //     this._checkpoint = Object.assign(this.checkpoint, newCheckpoint);
-  // }
 
   /**
-   * Setter
-   *
    * Set task's progress and clamp value if it is not in 0 ~ 1
    *
    * @param {number} newProgress
    */
   set progress(newProgress) {
     const pClamped = Math.max(0.0, min(newProgress, 1.0));
-    this.#progress = pClamped;
-    // this.checkpoint = Object.assign(this.checkpoint, {
-    //   progress: newProgress,
-    // });
+    this._progress = pClamped;
+  }
+
+  get fileDownload() {
+    return this._fileDownload;
   }
 
   /**
-   * Setter
-   *
    * Save a number of total downloaded files to checkpoint
    *
    * @param {number} num
    */
   set fileDownload(num) {
-    this.#fileDownload = num;
-    // this.checkpoint = Object.assign(this.checkpoint, {
-    //   downloaded: num,
-    // });
+    this._fileDownload = num;
+  }
+
+  get fileDownloadFail() {
+    return this._fileDownloadFail;
   }
 
   /**
@@ -222,26 +176,23 @@ export class M3U8DownloadTask extends DownloadTask {
    * @param {number} num
    */
   set fileDownloadFail(num) {
-    this.#fileDownloadFail = num;
-    // this.checkpoint = Object.assign(this.checkpoint, {
-    //   downloadFailed: num,
-    // });
+    this._fileDownloadFail = num;
   }
-
-  //#endregion Setter
+  //#endregion Getter Setter
 
   //#region Constructor
   constructor() {
     super();
+
+    this._progress = 0.0;
+    this._fileDownload = 0;
+    this._fileDownloadFail = 0;
+    this.queue = new PQueue();
   }
   //#endregion Constructor
 
   //#region Public overrided methods
 
-  // toJson() {
-  //   const checkPoint = Object.assign(super.toJson(), this.checkpoint);
-  //   return checkPoint;
-  // }
   serialize() {}
 
   deserialize() {}
@@ -278,7 +229,7 @@ export class M3U8DownloadTask extends DownloadTask {
     this.playlistUrl = this.m3u8Url;
     this.output = output;
     this.segmentsDir = this.options.segmentsDir;
-    this.queue = new PQueue({ concurrency: this.options.concurrency });
+    this.queue.concurrency = this.options.concurrency;
     this.totalSegments = 0;
     this.downloadedSegments = 0;
     this.downloadFailedSegments = 0;

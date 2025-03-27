@@ -50,49 +50,36 @@ export class DownloadTask extends EventEmitter {
 
   static StateTypes = getTaskStateTypes();
 
-  //#region Private fields
-  /** Private field
-   *
-   * task id
-   */
-  #taskId;
-
+  //#region Getter Setter
   /**
-   * Private field
-   *
-   * task status
-   */
-  #status = DownloadTask.StateTypes.Unknown;
-
-  /** Private field
-   *
-   * array of string contain all even logs
-   */
-  #eventLogs = [];
-  //#endregion Private fields
-
-  //#region Getter
-  /**
-   * Getter
-   *
    * Return this task's id
    */
   get taskId() {
-    return this.#taskId;
+    return this._taskId;
   }
 
   /**
-   * Getter
-   *
+   * Set task id
+   */
+  set taskId(id) {
+    this._taskId = id;
+  }
+
+  /**
    * Return task's status
    */
   get status() {
-    return this.#status;
+    return this._status;
   }
 
   /**
-   * Getter
-   *
+   * Set task status
+   */
+  set status(newStatus) {
+    this._status = newStatus;
+  }
+
+  /**
    * Return true if task is running otherwise false
    */
   get isRunning() {
@@ -106,29 +93,22 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
-   * Getter
-   *
    * Return event logs as array
    */
   get evenLogs() {
-    return this.#eventLogs;
+    return this._eventLogs;
   }
-  //#endregion Getter
+  //#endregion Getter Setter
 
-  //#region Setter
-  /**
-   * Setter
-   *
-   * Set task status
-   */
-  set status(newStatus) {
-    this.#status = newStatus;
-  }
   //#endregion Setter
 
   //#region Constructor
   constructor() {
     super();
+
+    this._taskId = undefined;
+    this._status = DownloadTask.StateTypes.Unknown;
+    this._eventLogs = [];
   }
 
   //#endregion Constructor
@@ -147,9 +127,9 @@ export class DownloadTask extends EventEmitter {
     });
 
     if (!taskId) {
-      this.#taskId = uuidv4();
+      this.taskId = uuidv4();
     } else {
-      this.#taskId = taskId;
+      this.taskId = taskId;
     }
 
     return this;
@@ -249,14 +229,6 @@ export class DownloadTask extends EventEmitter {
   }
 
   /**
-   * Get json object of this task
-   * @returns a JSON object
-   */
-  toJson() {
-    return { taskId: this.#taskId, status: this.status };
-  }
-
-  /**
    * Add an event log to log array
    *
    * @param {string} message
@@ -264,7 +236,7 @@ export class DownloadTask extends EventEmitter {
    */
   addEventLog(message) {
     const log = dateTimeLog(message);
-    this.#eventLogs.push(log);
+    this._eventLogs.push(log);
     return log;
   }
 
@@ -280,13 +252,14 @@ export class DownloadTask extends EventEmitter {
    * @param {()=>void} callback callback that will be called after status have been changed
    */
   changeStatus(newStatus, callback = undefined) {
-    const oldStatus = this.#status;
+    const oldStatus = this.status;
 
     this.status = newStatus;
     this.emit(DownloadTask.EventTypes.StatusChanged, oldStatus, this.status);
 
     if (callback) callback();
   }
+
   /**
    * Overridable
    *
