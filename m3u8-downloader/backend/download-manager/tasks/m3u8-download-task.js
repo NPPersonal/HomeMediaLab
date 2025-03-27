@@ -280,10 +280,10 @@ export class M3U8DownloadTask extends DownloadTask {
     m3u8Url,
     output,
     workingDir,
-    taskId = undefined,
+
     options = DefaultOptions
   ) {
-    super.init(taskId);
+    super.init();
 
     this.m3u8Url = m3u8Url;
     this.workingDir = workingDir;
@@ -568,7 +568,7 @@ export class M3U8DownloadTask extends DownloadTask {
     if (this.options.skipExistSegments && (await fs.pathExists(segmentPath))) {
       if (!this.downloadedFiles.includes(segmentPath))
         this.downloadedFiles.push(segmentPath);
-      this.downloadedSegments++;
+      // this.downloadedSegments++;
     } else {
       // Download the segment
       const response = await axios.get(tsUrl, {
