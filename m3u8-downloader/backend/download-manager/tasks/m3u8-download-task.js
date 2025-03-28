@@ -133,7 +133,6 @@ export class M3U8DownloadTask extends DownloadTask {
 
     let filterStates = [
       M3U8DownloadTask.StateTypes.Start,
-      M3U8DownloadTask.StateTypes.Resume,
       M3U8DownloadTask.StateTypes.PreProcessing,
       M3U8DownloadTask.StateTypes.Downloading,
       M3U8DownloadTask.StateTypes.PostProcessing,
@@ -145,7 +144,7 @@ export class M3U8DownloadTask extends DownloadTask {
       filterStates = [...filterStates, M3U8DownloadTask.StateTypes.Error];
     }
 
-    return filterStates.includes(this.status);
+    return filterStates.includes(this.stateStack.at(-1));
   }
 
   /**
@@ -224,7 +223,7 @@ export class M3U8DownloadTask extends DownloadTask {
 
   serializeToJSON() {
     const jsonData = {};
-    const filters = [
+    const ignoredKeys = [
       "_events",
       "_eventsCount",
       "queue",
@@ -235,14 +234,24 @@ export class M3U8DownloadTask extends DownloadTask {
     ];
 
     Object.getOwnPropertyNames(this).forEach((key) => {
-      if (!filters.includes(key)) jsonData[key] = this[key];
+      if (!ignoredKeys.includes(key)) jsonData[key] = this[key];
     });
 
-    return jsonData;
+    return { ...jsonData, isRunning: this.isRunning };
   }
 
   static deserializeFromJSON(jsonData) {
     const task = new M3U8DownloadTask();
+    const ignoredKeys = [
+      "_events",
+      "_eventsCount",
+      "queue",
+      "_fileDownload",
+      "_fileDownloadFail",
+      "urls",
+      "downloadedFiles",
+      "isRunning",
+    ];
 
     task.init(
       jsonData.m3u8Url,
@@ -253,7 +262,7 @@ export class M3U8DownloadTask extends DownloadTask {
     );
 
     Object.keys(jsonData).forEach((key) => {
-      if (key in task) {
+      if (!ignoredKeys.includes(key) && key in task) {
         task[key] = jsonData[key];
       }
     });
@@ -286,7 +295,7 @@ export class M3U8DownloadTask extends DownloadTask {
     super.init();
 
     this.m3u8Url = m3u8Url;
-    this.workingDir = workingDir;
+    this.workingDir = path.resolve(workingDir);
     this.output = path.resolve(output);
     this.options = Object.assign(
       { ...DefaultOptions, ...options },
@@ -328,6 +337,10 @@ export class M3U8DownloadTask extends DownloadTask {
       this.start();
       return;
     }
+    this.changeStatus(DownloadTask.StateTypes.Downloading, () => {
+      this.addEventLog("Downloading");
+      this.emit(DownloadTask.EventTypes.Downloading, this);
+    });
     this.queue.start();
   }
 

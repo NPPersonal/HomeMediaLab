@@ -9,16 +9,16 @@ export interface CheckpointType {
   taskId: string;
   isRunning: boolean;
   status: string;
-  downloaderStatus: string;
   m3u8Url: string;
   output: string;
   workingDir: string;
-  downloaded: number;
-  downloadFailed: number;
+  downloadedSegments: number;
+  downloadFailedSegments: number;
   progress: number;
   options: { [key: string]: any };
   [key: string]: any;
-  eventLogs: [string];
+  eventLogs: Array<string>;
+  errorLogs: Array<string>;
 }
 interface CheckpointQueuedType {
   queued: Array<CheckpointType>;
@@ -98,8 +98,6 @@ const useCheckpoints = () => {
         );
 
         if (found) return value;
-
-        // console.log("insert", queueName, index);
 
         // make a copy of checkpoint from old checkpoint state
         const newValue = { ...value };

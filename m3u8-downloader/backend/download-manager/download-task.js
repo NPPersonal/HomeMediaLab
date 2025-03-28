@@ -11,8 +11,6 @@ export const getTaskEventTypes = () => {
     /** (task)=>void */
     Pause: "pause",
     /** (task)=>void */
-    Resume: "resume",
-    /** (task)=>void */
     Canceled: "canceled",
     /** (task)=>void */
     PreProcessing: "pre-processing",
@@ -77,14 +75,6 @@ export class DownloadTask extends EventEmitter {
 
   /**
    *
-   * Set task status
-   */
-  set status(newStatus) {
-    this._status = newStatus;
-  }
-
-  /**
-   *
    * Return true if task is running otherwise false
    */
   get isRunning() {
@@ -95,21 +85,28 @@ export class DownloadTask extends EventEmitter {
       return false;
     }
 
-    return (
-      this.status === DownloadTask.StateTypes.Start ||
-      this.status === DownloadTask.StateTypes.Resume ||
-      this.status === DownloadTask.StateTypes.PreProcessing ||
-      this.status === DownloadTask.StateTypes.Downloading ||
-      this.status === DownloadTask.StateTypes.PostProcessing
-    );
+    return [
+      this.status === DownloadTask.StateTypes.Start,
+      this.status === DownloadTask.StateTypes.PreProcessing,
+      this.status === DownloadTask.StateTypes.Downloading,
+      this.status === DownloadTask.StateTypes.PostProcessing,
+    ].includes(this.stateStack.at(-1));
   }
 
   /**
    *
    * Return event logs as array
    */
-  get evenLogs() {
+  get eventLogs() {
     return this._eventLogs;
+  }
+
+  /**
+   *
+   * Return error logs as array
+   */
+  get errorLogs() {
+    return this._errorLogs;
   }
 
   /**
@@ -131,6 +128,9 @@ export class DownloadTask extends EventEmitter {
     this._status = DownloadTask.StateTypes.Unknown;
     this._eventLogs = [];
     this._stateStack = [];
+    this._errorLogs = [];
+
+    this.registerEventListeners();
   }
 
   //#endregion Constructor
@@ -163,7 +163,10 @@ export class DownloadTask extends EventEmitter {
   async start() {
     try {
       //start only when task is not running or in Resume status
-      if (!this.isRunning || this.status === DownloadTask.StateTypes.Resume) {
+      if (
+        !this.isRunning ||
+        this.stateStack.at(-1) === DownloadTask.StateTypes.Pause
+      ) {
         this.changeStatus(DownloadTask.StateTypes.Start, () => {
           this.addEventLog("Start");
           this.emit(DownloadTask.EventTypes.Start, this);
@@ -199,7 +202,8 @@ export class DownloadTask extends EventEmitter {
         await this.doComplete();
       } else {
         console.warn(
-          `Unable to start task as it is running, status: ${this.status}`
+          `Unable to start task as it is running, status: ${this.status}`,
+          this.stateStack
         );
       }
     } catch (error) {
@@ -233,11 +237,6 @@ export class DownloadTask extends EventEmitter {
    */
   async resume() {
     if (this.status !== DownloadTask.StateTypes.Pause) return;
-
-    this.changeStatus(DownloadTask.StateTypes.Resume, () => {
-      this.addEventLog("Resume");
-      this.emit(DownloadTask.EventTypes.Resume, this);
-    });
     await this.doResume();
   }
 
@@ -268,7 +267,7 @@ export class DownloadTask extends EventEmitter {
    */
   addEventLog(message) {
     const log = dateTimeLog(message);
-    this._eventLogs.push(log);
+    this.eventLogs.push(log);
     return log;
   }
 
@@ -292,7 +291,7 @@ export class DownloadTask extends EventEmitter {
 
   //#region Protected methods
   /**
-   * Change task's status
+   * Change task's status and push new state to state stack
    *
    * @param {DownloadTask.StateTypes} newStatus new status to change to
    * @param {()=>void} callback callback that will be called after status have been changed
@@ -300,7 +299,7 @@ export class DownloadTask extends EventEmitter {
   changeStatus(newStatus, callback = undefined) {
     const oldStatus = this.status;
 
-    this.status = newStatus;
+    this._status = newStatus;
 
     if (this._stateStack.length === 0) {
       this._stateStack.push(this.status);
@@ -358,7 +357,7 @@ export class DownloadTask extends EventEmitter {
   /**
    * Overridable
    *
-   * Call after task enter `Resume` status
+   * Call when task resume
    */
   async doResume() {}
 
@@ -369,4 +368,12 @@ export class DownloadTask extends EventEmitter {
    */
   async doComplete() {}
   //#endregion Protected methods
+
+  //#region Private methods
+  registerEventListeners() {
+    this.on(DownloadTask.EventTypes.Error, (task, error) => {
+      this.errorLogs.push(`Error: ${error.message}`);
+    });
+  }
+  //#endregion Private methods
 }

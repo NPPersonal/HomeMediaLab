@@ -9,7 +9,6 @@ import { TaskPropType } from "../types/task";
 const TaskCardContent = (props: TaskPropType) => {
   const { taskData } = props;
   const percent = Math.floor(taskData.progress * 100.0);
-
   return (
     <CardContent>
       {taskData.isRunning && (
@@ -23,12 +22,11 @@ const TaskCardContent = (props: TaskPropType) => {
         triggerName="Information"
         kvObject={{
           Status: taskData.status,
-          "Downloader Status": taskData.downloaderStatu,
           "Source URL": taskData.m3u8Url,
           Output: taskData.output,
           "Working directory": taskData.workingDir,
-          "Downloaded files": taskData.downloaded,
-          "Download failed": taskData.downloadFailed,
+          "Downloaded files": taskData.downloadedSegments,
+          "Download failed": taskData.downloadFailedSegments,
         }}
       />
 
@@ -40,6 +38,9 @@ const TaskCardContent = (props: TaskPropType) => {
       )}
       {taskData.eventLogs && (
         <ListAccordion triggerName="Event logs" list={taskData.eventLogs} />
+      )}
+      {taskData.errorLogs && (
+        <ListAccordion triggerName="Error logs" list={taskData.errorLogs} />
       )}
     </CardContent>
   );

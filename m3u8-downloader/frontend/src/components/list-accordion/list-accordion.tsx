@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 
 interface PropType {
   triggerName: string;
-  list: [any];
+  list: Array<any>;
 }
 
 const ListAccordion = (props: PropType) => {

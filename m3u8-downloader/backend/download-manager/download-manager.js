@@ -83,16 +83,25 @@ export default class DownloadManager extends EventEmitter {
   #taskCheckpoint = undefined;
   //#endregion Private fields
 
-  //#region Setter
+  //#region Getter Setter
   /**
-   * Setter
+   *
+   * Return checkpoints
    *
    * @return task checkpoints
    */
   get checkpoints() {
     return this.#taskCheckpoint;
   }
-  //#endregion Setter
+
+  /**
+   *
+   * Return trasnsformed checkpoints
+   */
+  get transformedCheckpoints() {
+    return this.transformCheckpoint(this.#taskCheckpoint);
+  }
+  //#endregion Getter Setter
 
   //#region  Constructor
   /**
@@ -101,6 +110,7 @@ export default class DownloadManager extends EventEmitter {
    */
   constructor() {
     super();
+
     this.#taskCheckpoint = this.loadCheckpoint(DATA_FILE_PATH);
   }
   //#endregion Constructor
@@ -129,84 +139,29 @@ export default class DownloadManager extends EventEmitter {
     if (this.#isInitialized) return this;
 
     // load task from checkpoint and add to queue
+    const tasks = [];
     this.#taskCheckpoint.queued.forEach((checkpoint) => {
       // create task from checkpoint
-      const task = new M3U8DownloadTask(checkpoint.taskId).init(
-        checkpoint.m3u8Url,
-        checkpoint.output,
-        checkpoint.workingDir,
-        checkpoint.options,
-        checkpoint.status,
-        checkpoint.downloaderStatus
-      );
+      const task = M3U8DownloadTask.deserializeFromJSON(checkpoint);
 
-      this.queueAddTask(task);
-
-      // if task was running then run task
       if (checkpoint.isRunning) {
-        this.startTaskBy(task.taskId);
+        tasks.push({ isRunning: true, task: task });
+      } else {
+        tasks.push({ isRunning: false, task: task });
       }
     });
 
-    /**
-     * Transform observable change according to
-     * https://github.com/gullerya/object-observer/blob/main/docs/observable.md
-     *
-     * @param {*} change
-     * @returns as an Object
-     * ```
-     * {
-     * operation: 'kind of operation as string',
-     * in: 'checkpoint queue name as string',
-     * at: 'index in the queue as number',
-     * value: 'object that is associated with operation'
-     * }
-     * ```
-     */
-    const transformObservalChange = (change) => {
-      const index = change.path.pop();
-      const queueName = change.path.pop();
-      return {
-        operation: change.type,
-        in: queueName,
-        at: index,
-        value: change.value ? change.value : change.oldValue,
-      };
-    };
-    // observe task checkpoint data change and write
-    // data to json file
-    Observable.observe(this.#taskCheckpoint, (changes) => {
-      try {
-        fs.writeJsonSync(DATA_FILE_PATH, this.#taskCheckpoint);
-
-        changes.forEach((change) => {
-          if (change.type === "update") {
-            this.emit(
-              DownloadManager.CheckpointEventTypes.Update,
-              transformObservalChange(change)
-            );
-            return;
-          }
-
-          if (change.type === "insert") {
-            this.emit(
-              DownloadManager.CheckpointEventTypes.Insert,
-              transformObservalChange(change)
-            );
-            return;
-          }
-          if (change.type === "delete") {
-            this.emit(
-              DownloadManager.CheckpointEventTypes.Delete,
-              transformObservalChange(change)
-            );
-            return;
-          }
-        });
-      } catch (error) {
-        console.error(`Fail to write to json file ${error}`);
+    tasks.forEach((value) => {
+      this.queueAddTask(value.task);
+      if (value.isRunning) {
+        value.task.changeStatus(M3U8DownloadTask.StateTypes.Pause);
+        // start task
+        this.startTaskBy(value.task.taskId);
       }
     });
+
+    this.observeTaskCheckpoints();
+
     return this;
   }
 
@@ -287,7 +242,128 @@ export default class DownloadManager extends EventEmitter {
 
   //#region  Private methods
   /**
-   * Find a download task by task's id
+   * Transform checkpoint data
+   *
+   * This perform deep transform **(recursive)** on checkpoint, if it
+   * encounter an object then all keys in the object with
+   * string start with underscore('_') will be replaced with no
+   * underscore string e.g key `_name` transformed to `name`.
+   *
+   * Rest remain the same.
+   *
+   * @param {any} checkpoint
+   * @return depend on what you passed in to `checkpoint`
+   */
+  transformCheckpoint = (checkpoint) => {
+    // if checkpoint is an Object
+    if (checkpoint instanceof Object && !Array.isArray(checkpoint)) {
+      const newObj = {};
+
+      Object.keys(checkpoint).forEach((key) => {
+        let newKey = key;
+        // remove underscore if key start with '_'
+        if (newKey.startsWith("_")) {
+          newKey = newKey.substring(1);
+        }
+        newObj[newKey] = this.transformCheckpoint(checkpoint[key]);
+      });
+
+      return newObj;
+    } else if (checkpoint instanceof Object && Array.isArray(checkpoint)) {
+      // if checkpoint is an Array
+      const newArr = [];
+
+      checkpoint.forEach((value, index) => {
+        newArr[index] = this.transformCheckpoint(value);
+      });
+
+      return newArr;
+    } else {
+      // if checkpoint is neither an Object or an Array
+      return checkpoint;
+    }
+  };
+
+  /**
+   * Transform observable change according to
+   * https://github.com/gullerya/object-observer/blob/main/docs/observable.md
+   *
+   * @param {*} change change information
+   * @returns as an Object
+   * ```
+   * {
+   * operation: 'kind of operation as string',
+   * in: 'checkpoint queue name as string',
+   * at: 'index in the queue as number',
+   * value: 'object that is associated with operation'
+   * }
+   * ```
+   */
+  transformObservalChange(change) {
+    const index = change.path.pop();
+    const queueName = change.path.pop();
+
+    // transform changed value
+    const transformedValue = change.value
+      ? this.transformCheckpoint(change.value)
+      : this.transformCheckpoint(change.oldValue);
+
+    if (change.type === "insert") {
+      console.log("transformed value: ", transformedValue);
+      console.log(change);
+    }
+
+    return {
+      operation: change.type,
+      in: queueName,
+      at: index,
+      value: transformedValue,
+    };
+  }
+
+  saveTaskCheckpoint() {
+    fs.writeJsonSync(DataTransfer, this.#taskCheckpoint);
+  }
+
+  observeTaskCheckpoints() {
+    // observe task checkpoint data change and write
+    // data to json file
+    Observable.observe(this.#taskCheckpoint, (changes) => {
+      try {
+        fs.writeJsonSync(DATA_FILE_PATH, this.#taskCheckpoint);
+
+        changes.forEach((change) => {
+          if (change.type === "update") {
+            this.emit(
+              DownloadManager.CheckpointEventTypes.Update,
+              this.transformObservalChange(change)
+            );
+            return;
+          }
+
+          if (change.type === "insert") {
+            this.emit(
+              DownloadManager.CheckpointEventTypes.Insert,
+              this.transformObservalChange(change)
+            );
+            return;
+          }
+          if (change.type === "delete") {
+            this.emit(
+              DownloadManager.CheckpointEventTypes.Delete,
+              this.transformObservalChange(change)
+            );
+            return;
+          }
+        });
+      } catch (error) {
+        console.error(`Fail to write to json file ${error}`);
+      }
+    });
+  }
+
+  /**
+   * Find a download task by task's id in task queue
    *
    * @param {string} taskId task's id to match
    * @returns a download task otherwise undefined
@@ -313,7 +389,7 @@ export default class DownloadManager extends EventEmitter {
       );
 
     const foundCheckpoint = this.#taskCheckpoint[inQueue].find((checkpoint) => {
-      return checkpoint.taskId === taskId;
+      return checkpoint._taskId === taskId;
     });
     return foundCheckpoint;
   }
@@ -346,7 +422,7 @@ export default class DownloadManager extends EventEmitter {
     if (foundCheckpoint) return;
 
     // add task's checkpoint to checkpoint queued
-    const taskCheckpoint = task.toJson();
+    const taskCheckpoint = task.serializeToJSON();
     this.#taskCheckpoint.queued.unshift(taskCheckpoint);
 
     return task;
@@ -383,7 +459,7 @@ export default class DownloadManager extends EventEmitter {
     }
 
     // add task checkpoint to checkpoint completed
-    const taskCheckpoint = task.toJson();
+    const taskCheckpoint = task.serializeToJSON();
     this.#taskCheckpoint.completed.unshift(taskCheckpoint);
   }
 
@@ -416,7 +492,7 @@ export default class DownloadManager extends EventEmitter {
     }
 
     // add task checkpoint to checkpoint canceled
-    const taskCheckpoint = task.toJson();
+    const taskCheckpoint = task.serializeToJSON();
     this.#taskCheckpoint.canceled.unshift(taskCheckpoint);
   }
 
@@ -437,8 +513,9 @@ export default class DownloadManager extends EventEmitter {
 
     const checkpointIndex =
       this.#taskCheckpoint.queued.indexOf(foundCheckpoint);
-    const taskCheckpoint = task.toJson();
+    const taskCheckpoint = task.serializeToJSON();
 
+    console.log("task update: ", taskCheckpoint._taskId);
     // remove old checkpoint and insert new checkpoint
     this.#taskCheckpoint.queued.splice(checkpointIndex, 1, taskCheckpoint);
   }
@@ -513,11 +590,6 @@ export default class DownloadManager extends EventEmitter {
 
     downloadTask.on(M3U8DownloadTask.EventTypes.Pause, (task) => {
       console.log(`Download task ${task.taskId} paused`);
-      this.queueTaskUpdated(task);
-    });
-
-    downloadTask.on(M3U8DownloadTask.EventTypes.Resume, (task) => {
-      console.log(`Download task ${task.taskId} resumed`);
       this.queueTaskUpdated(task);
     });
 
