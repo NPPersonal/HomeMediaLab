@@ -208,8 +208,6 @@ export class DownloadTask extends EventEmitter {
       }
     } catch (error) {
       this.changeStatus(DownloadTask.StateTypes.Error, () => {
-        console.log(error);
-        this.addEventLog(`Error: ${error.message}`);
         this.emit(
           DownloadTask.EventTypes.Error,
           this,
@@ -271,6 +269,18 @@ export class DownloadTask extends EventEmitter {
     return log;
   }
 
+  /**
+   * Add an error log to error log array
+   *
+   * @param {string} errorMessage
+   * @returns error log in string
+   */
+  addErrorLog(errorMessage) {
+    const errorLog = dateTimeLog(errorMessage);
+    this.errorLogs.push(errorLog);
+    return errorLog;
+  }
+
   serializeToJSON() {
     const jsonData = {};
 
@@ -310,6 +320,21 @@ export class DownloadTask extends EventEmitter {
     this.emit(DownloadTask.EventTypes.StatusChanged, oldStatus, this.status);
 
     if (callback) callback();
+  }
+
+  /**
+   * Overridable
+   *
+   * Subclass implementation must call `super.registerEventListeners()`
+   *
+   * Default implementation is to listen on event Error
+   * and add error to error logs
+   */
+  registerEventListeners() {
+    this.on(DownloadTask.EventTypes.Error, (task, error) => {
+      console.log(error);
+      this.errorLogs.push(`Error: ${error.message}`);
+    });
   }
 
   /**
@@ -370,10 +395,6 @@ export class DownloadTask extends EventEmitter {
   //#endregion Protected methods
 
   //#region Private methods
-  registerEventListeners() {
-    this.on(DownloadTask.EventTypes.Error, (task, error) => {
-      this.errorLogs.push(`Error: ${error.message}`);
-    });
-  }
+
   //#endregion Private methods
 }

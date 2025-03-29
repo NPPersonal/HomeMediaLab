@@ -103,18 +103,6 @@ export default class DownloadManager extends EventEmitter {
   }
   //#endregion Getter Setter
 
-  //#region  Constructor
-  /**
-   * Create an instance of manager
-   *
-   */
-  constructor() {
-    super();
-
-    this.#taskCheckpoint = this.loadCheckpoint(DATA_FILE_PATH);
-  }
-  //#endregion Constructor
-
   //#region Class methods
   /**
    * Return the single instance of manager
@@ -127,6 +115,18 @@ export default class DownloadManager extends EventEmitter {
     return DownloadManager.#_instance;
   }
   //#endregion Class methods
+
+  //#region  Constructor
+  /**
+   * Create an instance of manager
+   *
+   */
+  constructor() {
+    super();
+
+    this.#taskCheckpoint = Observable.from(this.loadCheckpoint(DATA_FILE_PATH));
+  }
+  //#endregion Constructor
 
   //#region  Public methods
   /**
@@ -160,8 +160,23 @@ export default class DownloadManager extends EventEmitter {
       }
     });
 
-    this.observeTaskCheckpoints();
+    // Observe changes of properties for task checkpoints
+    if (this.#taskCheckpoint) {
+      Object.keys(this.#taskCheckpoint).forEach((key) => {
+        if (Observable.isObservable(this.#taskCheckpoint[key])) {
+          // Observe top level of changing array not going deep
+          Observable.observe(
+            this.#taskCheckpoint[key],
+            this.makeObservableCallback(key),
+            { pathsOf: "" }
+          );
+        } else {
+          log.warn(`Unable to observe ${key} of task checkpoint`);
+        }
+      });
+    }
 
+    this.#isInitialized = true;
     return this;
   }
 
@@ -299,19 +314,14 @@ export default class DownloadManager extends EventEmitter {
    * }
    * ```
    */
-  transformObservalChange(change) {
-    const index = change.path.pop();
-    const queueName = change.path.pop();
+  transformObservalChange(change, inQueueName) {
+    const index = change.path.at(-1);
+    const queueName = inQueueName;
 
     // transform changed value
     const transformedValue = change.value
       ? this.transformCheckpoint(change.value)
       : this.transformCheckpoint(change.oldValue);
-
-    if (change.type === "insert") {
-      console.log("transformed value: ", transformedValue);
-      console.log(change);
-    }
 
     return {
       operation: change.type,
@@ -321,45 +331,47 @@ export default class DownloadManager extends EventEmitter {
     };
   }
 
-  saveTaskCheckpoint() {
-    fs.writeJsonSync(DataTransfer, this.#taskCheckpoint);
-  }
+  /**
+   * Create an observer callback which take
+   * observable changes.
+   *
+   * Callback that observe change on `update`, `insert`, `delete` then
+   * do transformation on changes' value, finally emit event
+   *
+   * @param {string} queueName name of queue for the callback. name which
+   * will be used when transform observal changes
+   * @returns function callback `(changes)=>void`
+   */
+  makeObservableCallback(queueName) {
+    return (changes) => {
+      // write to json file
+      fs.writeJsonSync(DATA_FILE_PATH, this.#taskCheckpoint);
 
-  observeTaskCheckpoints() {
-    // observe task checkpoint data change and write
-    // data to json file
-    Observable.observe(this.#taskCheckpoint, (changes) => {
-      try {
-        fs.writeJsonSync(DATA_FILE_PATH, this.#taskCheckpoint);
+      changes.forEach((change) => {
+        if (change.type === "update") {
+          this.emit(
+            DownloadManager.CheckpointEventTypes.Update,
+            this.transformObservalChange(change, queueName)
+          );
+          return;
+        }
 
-        changes.forEach((change) => {
-          if (change.type === "update") {
-            this.emit(
-              DownloadManager.CheckpointEventTypes.Update,
-              this.transformObservalChange(change)
-            );
-            return;
-          }
-
-          if (change.type === "insert") {
-            this.emit(
-              DownloadManager.CheckpointEventTypes.Insert,
-              this.transformObservalChange(change)
-            );
-            return;
-          }
-          if (change.type === "delete") {
-            this.emit(
-              DownloadManager.CheckpointEventTypes.Delete,
-              this.transformObservalChange(change)
-            );
-            return;
-          }
-        });
-      } catch (error) {
-        console.error(`Fail to write to json file ${error}`);
-      }
-    });
+        if (change.type === "insert") {
+          this.emit(
+            DownloadManager.CheckpointEventTypes.Insert,
+            this.transformObservalChange(change, queueName)
+          );
+          return;
+        }
+        if (change.type === "delete") {
+          this.emit(
+            DownloadManager.CheckpointEventTypes.Delete,
+            this.transformObservalChange(change, queueName)
+          );
+          return;
+        }
+      });
+    };
   }
 
   /**
@@ -515,7 +527,6 @@ export default class DownloadManager extends EventEmitter {
       this.#taskCheckpoint.queued.indexOf(foundCheckpoint);
     const taskCheckpoint = task.serializeToJSON();
 
-    console.log("task update: ", taskCheckpoint._taskId);
     // remove old checkpoint and insert new checkpoint
     this.#taskCheckpoint.queued.splice(checkpointIndex, 1, taskCheckpoint);
   }
@@ -562,18 +573,17 @@ export default class DownloadManager extends EventEmitter {
    * Load checkpoint
    *
    * @param {string} filePath path to checkpoint json file
-   * @returns an Observable checkpoint
+   * @returns a JSON Object
    */
   loadCheckpoint(filePath) {
     // load checkpoint json file if json file exists
     // otherwise create one
     if (fs.pathExistsSync(filePath)) {
-      return Observable.from(fs.readJsonSync(filePath));
+      return fs.readJsonSync(filePath);
     } else {
-      const observableCheckpoint = Observable.from(DefaultCheckpoint);
-      fs.writeJSONSync(filePath, observableCheckpoint);
+      fs.writeJSONSync(filePath, DefaultCheckpoint);
 
-      return observableCheckpoint;
+      return DefaultCheckpoint;
     }
   }
 

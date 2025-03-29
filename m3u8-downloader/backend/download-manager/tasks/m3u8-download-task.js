@@ -166,44 +166,6 @@ export class M3U8DownloadTask extends DownloadTask {
     const pClamped = Math.max(0.0, Math.min(newProgress, 1.0));
     this._progress = pClamped;
   }
-
-  /**
-   *
-   * Return how many video segment file has been downloaded
-   * successful
-   */
-  get fileDownload() {
-    return this._fileDownload;
-  }
-
-  /**
-   *
-   * Set how many video segment file has been downloaded
-   * successful
-   *
-   * @param {number} num
-   */
-  set fileDownload(num) {
-    this._fileDownload = num;
-  }
-
-  /**
-   *
-   * Return how many video segment file failed to be downloaded
-   */
-  get fileDownloadFail() {
-    return this._fileDownloadFail;
-  }
-
-  /**
-   *
-   * Set how many video segment file failed to be downloaded
-   *
-   * @param {number} num
-   */
-  set fileDownloadFail(num) {
-    this._fileDownloadFail = num;
-  }
   //#endregion Getter Setter
 
   //#region Constructor
@@ -211,11 +173,7 @@ export class M3U8DownloadTask extends DownloadTask {
     super();
 
     this._progress = 0.0;
-    this._fileDownload = 0;
-    this._fileDownloadFail = 0;
     this.queue = new PQueue();
-
-    this.registerEventListeners();
   }
   //#endregion Constructor
 
@@ -227,8 +185,6 @@ export class M3U8DownloadTask extends DownloadTask {
       "_events",
       "_eventsCount",
       "queue",
-      "_fileDownload",
-      "_fileDownloadFail",
       "urls",
       "downloadedFiles",
     ];
@@ -246,8 +202,6 @@ export class M3U8DownloadTask extends DownloadTask {
       "_events",
       "_eventsCount",
       "queue",
-      "_fileDownload",
-      "_fileDownloadFail",
       "urls",
       "downloadedFiles",
       "isRunning",
@@ -266,6 +220,12 @@ export class M3U8DownloadTask extends DownloadTask {
         task[key] = jsonData[key];
       }
     });
+
+    if (!task.options.skipExistSegments) {
+      task.downloadedSegments = 0;
+      task.downloadFailedSegments = 0;
+    }
+
     return task;
   }
   //#endregion Public overrided methods
@@ -409,27 +369,21 @@ export class M3U8DownloadTask extends DownloadTask {
             await this.convertToMp4(tsMediaPath);
           } else {
             fs.unlinkSync(tsMediaPath);
-            this.changeStatus(DownloadTask.StateTypes.Error, () =>
-              this.emit(
-                DownloadTask.EventTypes.Error,
-                this,
-                new Error(
-                  `Unable to convert to mp4, output ${this.output} is not a valid file types\nSupported file types are: ${SUPPORT_OUTPUT_FILE_TYPES}`
-                )
-              )
-            );
+            this.changeStatus(DownloadTask.StateTypes.Error, () => {
+              const error = new Error(
+                `Unable to convert to mp4, output ${this.output} is not a valid file types\nSupported file types are: ${SUPPORT_OUTPUT_FILE_TYPES}`
+              );
+              this.emit(DownloadTask.EventTypes.Error, this, error);
+            });
           }
         } else {
           fs.unlinkSync(tsMediaPath);
-          this.changeStatus(DownloadTask.StateTypes.Error, () =>
-            this.emit(
-              DownloadTask.EventTypes.Error,
-              this,
-              new Error(
-                `Unable to convert to mp4, output ${this.output} was not given`
-              )
-            )
-          );
+          this.changeStatus(DownloadTask.StateTypes.Error, () => {
+            const error = new Error(
+              `Unable to convert to mp4, output ${this.output} was not given`
+            );
+            this.emit(DownloadTask.EventTypes.Error, this, error);
+          });
         }
       }
     }
@@ -441,6 +395,22 @@ export class M3U8DownloadTask extends DownloadTask {
       return;
     }
   }
+
+  registerEventListeners() {
+    super.registerEventListeners();
+
+    this.on(M3U8DownloadTask.EventTypes.Progress, (task, progress) => {
+      const progressFloat = parseFloat(progress.downloaded / progress.total);
+      this.progress = progressFloat;
+    });
+
+    this.on(M3U8DownloadTask.EventTypes.Completed, (task) => {
+      if (!this.options.interruptOnError) {
+        this.progress = 1.0;
+      }
+    });
+  }
+
   //#endregion Override
 
   //#region Private util methods
@@ -541,17 +511,13 @@ export class M3U8DownloadTask extends DownloadTask {
     for (const [index, tsUrl] of tsUrls.entries()) {
       this.queue
         .add(() => this.downloadSegment(tsUrl, index))
-        .catch((error) => {
+        .catch((err) => {
           this.downloadFailedSegments++;
           this.changeStatus(DownloadTask.StateTypes.Error, () => {
-            this.fileDownloadFail += 1;
-            this.emit(
-              DownloadTask.EventTypes.Error,
-              this,
-              new Error(
-                `Failed to download segment ${index}\nurl: ${tsUrl} \nreason: ${error}\n`
-              )
+            const error = new Error(
+              `Failed to download segment ${index}\nurl: ${tsUrl} \nreason: ${err.message}\n`
             );
+            this.emit(DownloadTask.EventTypes.Error, this, error);
           });
         });
     }
@@ -607,7 +573,6 @@ export class M3U8DownloadTask extends DownloadTask {
       total: this.totalSegments,
     });
 
-    this.fileDownload += 1;
     this.emit(M3U8DownloadTask.EventTypes.Progress, this, progress);
 
     return progress;
@@ -657,16 +622,13 @@ export class M3U8DownloadTask extends DownloadTask {
 
         // Whether to delete .ts source file after merged or not
         if (deleteSource) await fs.unlink(segmentPath); // 删除临时 TS 片段文件
-      } catch (error) {
-        this.changeStatus(DownloadTask.StateTypes.Error, () =>
-          this.emit(
-            DownloadTask.EventTypes.Error,
-            this,
-            new Error(
-              `Segment ${index} is missing\nExpected file at path: ${segmentPath}\n${error}\n`
-            )
-          )
-        );
+      } catch (err) {
+        this.changeStatus(DownloadTask.StateTypes.Error, () => {
+          const error = new Error(
+            `Merge segment failed\nSegment ${index} is missing\nExpected file at path: ${segmentPath}\n${err.message}\n`
+          );
+          this.emit(DownloadTask.EventTypes.Error, this, error);
+        });
 
         // Interrupt procedure while encounter error
         // otherwise continue merging process
@@ -709,26 +671,20 @@ export class M3U8DownloadTask extends DownloadTask {
         "-y",
       ]);
 
-      ffmpeg.on("error", (error) => {
-        this.changeStatus(DownloadTask.StateTypes.Error, () =>
-          this.emit(
-            DownloadTask.EventTypes.Error,
-            this,
-            `Failed to convert to MP4: ${error.message}`
-          )
-        );
+      ffmpeg.on("error", (err) => {
+        this.changeStatus(DownloadTask.StateTypes.Error, () => {
+          const error = new Error(`Failed to convert to MP4: ${err.message}`);
+          this.emit(DownloadTask.EventTypes.Error, this, error);
+        });
         reject(error);
       });
 
       ffmpeg.on("close", (code) => {
         if (code !== 0) {
-          this.changeStatus(DownloadTask.StateTypes.Error, () =>
-            this.emit(
-              DownloadTask.EventTypes.Error,
-              this,
-              `FFmpeg process exited with code ${code}`
-            )
-          );
+          this.changeStatus(DownloadTask.StateTypes.Error, () => {
+            const error = new Error(`FFmpeg process exited with code ${code}`);
+            this.emit(DownloadTask.EventTypes.Error, this, error);
+          });
           reject(new Error(`FFmpeg process exited with code ${code}`));
           return;
         }
@@ -749,7 +705,14 @@ export class M3U8DownloadTask extends DownloadTask {
       this.downloadedFiles.map(async (file) => {
         try {
           await fs.unlink(file);
-        } catch (error) {}
+        } catch (err) {
+          this.changeStatus(DownloadTask.StateTypes.Error, () => {
+            const error = new Error(
+              `Clean up downloaded file fail ${file}\n${err.message}`
+            );
+            this.emit(DownloadTask.EventTypes.Error, this, error);
+          });
+        }
       })
     );
     if (this.options.convert2Mp4) {
@@ -758,20 +721,8 @@ export class M3U8DownloadTask extends DownloadTask {
         await fs.unlink(mergedFilePath);
       }
     }
+    // make sure the directory is clean
+    await fs.rm(this.options.segmentsDir, { recursive: true });
   }
   //#endregion Private util methods
-
-  //#region Private methods
-  registerEventListeners() {
-    this.on(M3U8DownloadTask.EventTypes.Progress, (task, progress) => {
-      const progressFloat = parseFloat(progress.downloaded / progress.total);
-      this.progress = progressFloat;
-    });
-    this.on(M3U8DownloadTask.EventTypes.Completed, (task) => {
-      if (!this.options.interruptOnError) {
-        this.progress = 1.0;
-      }
-    });
-  }
-  //#endregion Private methods
 }

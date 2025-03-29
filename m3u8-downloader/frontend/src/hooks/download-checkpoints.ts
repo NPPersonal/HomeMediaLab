@@ -14,6 +14,7 @@ export interface CheckpointType {
   workingDir: string;
   downloadedSegments: number;
   downloadFailedSegments: number;
+  totalSegments: number;
   progress: number;
   options: { [key: string]: any };
   [key: string]: any;

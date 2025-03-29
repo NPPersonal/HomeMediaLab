@@ -53,6 +53,7 @@ export default function Home() {
         setIsScrapping(false);
         setScrappingError(undefined);
         setFoundHLSUrls(data);
+        setWebUrl("");
       } catch (error) {
         setFoundHLSUrls(undefined);
         if (error instanceof Error) {

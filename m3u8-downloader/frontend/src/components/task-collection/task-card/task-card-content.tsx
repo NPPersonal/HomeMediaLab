@@ -27,6 +27,7 @@ const TaskCardContent = (props: TaskPropType) => {
           "Working directory": taskData.workingDir,
           "Downloaded files": taskData.downloadedSegments,
           "Download failed": taskData.downloadFailedSegments,
+          "Total files": taskData.totalSegments,
         }}
       />
 
@@ -37,10 +38,24 @@ const TaskCardContent = (props: TaskPropType) => {
         />
       )}
       {taskData.eventLogs && (
-        <ListAccordion triggerName="Event logs" list={taskData.eventLogs} />
+        <ListAccordion
+          triggerName={`Event logs${
+            taskData.eventLogs.length > 0
+              ? `(${taskData.eventLogs.length})`
+              : ""
+          }`}
+          list={taskData.eventLogs}
+        />
       )}
       {taskData.errorLogs && (
-        <ListAccordion triggerName="Error logs" list={taskData.errorLogs} />
+        <ListAccordion
+          triggerName={`Error logs${
+            taskData.errorLogs.length > 0
+              ? `(${taskData.errorLogs.length})`
+              : ""
+          }`}
+          list={taskData.errorLogs}
+        />
       )}
     </CardContent>
   );
