@@ -181,32 +181,37 @@ export class M3U8DownloadTask extends DownloadTask {
 
   serializeToJSON() {
     const jsonData = {};
+
+    // class properties that we don't want to serialized
     const ignoredKeys = [
-      "_events",
-      "_eventsCount",
-      "queue",
-      "urls",
-      "downloadedFiles",
+      "_events", // EventEmitter3 library
+      "_eventsCount", // EventEmitter3 library
+      "queue", // p-queue library
+      "urls", // total urls that need to be downloaded
+      "downloadedFiles", // list of files uri that has been downloaded
     ];
 
     Object.getOwnPropertyNames(this).forEach((key) => {
       if (!ignoredKeys.includes(key)) jsonData[key] = this[key];
     });
 
+    // also add property for task is running or not
+    // despite it is a getter of class
     return { ...jsonData, isRunning: this.isRunning };
   }
 
   static deserializeFromJSON(jsonData) {
     const task = new M3U8DownloadTask();
     const ignoredKeys = [
-      "_events",
-      "_eventsCount",
-      "queue",
-      "urls",
-      "downloadedFiles",
-      "isRunning",
+      "_events", // EventEmitter3 library
+      "_eventsCount", // EventEmitter3 library
+      "queue", // p-queue library
+      "urls", // total urls that need to be downloaded
+      "downloadedFiles", // list of files uri that has been downloaded
+      "isRunning", // don't deserialize this property as it is getter of class
     ];
 
+    //init task
     task.init(
       jsonData.m3u8Url,
       jsonData.output,
@@ -215,12 +220,16 @@ export class M3U8DownloadTask extends DownloadTask {
       jsonData.options
     );
 
+    // apply properties to task
     Object.keys(jsonData).forEach((key) => {
       if (!ignoredKeys.includes(key) && key in task) {
         task[key] = jsonData[key];
       }
     });
 
+    // reset downloadedSegments and downloadFailedSegments counter to 0
+    // if skipExistSegments option is false which mean redownload
+    // all segments
     if (!task.options.skipExistSegments) {
       task.downloadedSegments = 0;
       task.downloadFailedSegments = 0;
@@ -242,16 +251,8 @@ export class M3U8DownloadTask extends DownloadTask {
    * @param {string} workingDir task's working directory e.g `./tmp`,
    * the actual working directory will be `workingDir/{taskId}`
    * @param {DefaultOptions} options options will passed to M3U8Downloader
-   * @param {string} status task's status only for recovery
-   * @param {string} downloaderStatus downloader's status only for recovery
    */
-  init(
-    m3u8Url,
-    output,
-    workingDir,
-
-    options = DefaultOptions
-  ) {
+  init(m3u8Url, output, workingDir, options = DefaultOptions) {
     super.init();
 
     this.m3u8Url = m3u8Url;
