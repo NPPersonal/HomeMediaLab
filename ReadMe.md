@@ -61,6 +61,8 @@ Server side have a module `m3u8-downloader` which is written in ES6 javascript a
 > - Add M3U8 download task to wrap around m3u8 downloader
 > - Add Download manager managing multiple m3u8 download tasks
 > - Store task's checkpoint to disk as json file and recover tasks from checkpoint
+> - Add frontend web page for managing download tasks
+> - Frontend provide tool for grabbing HLS video from website and download HLS video
 
 ### M3U8Downloader implementatoin change:
 
