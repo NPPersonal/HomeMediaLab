@@ -3,7 +3,7 @@ import { Observable } from "object-observer";
 import { M3U8DownloadTask } from "./tasks/m3u8-download-task.js";
 import EventEmitter from "eventemitter3";
 
-const DATA_FILE_PATH = "task-checkpoints.json";
+const CHECKPOINT_FILE_PATH = "task-checkpoints.json";
 
 const CheckPointQueueNames = ["queued", "completed", "canceled"];
 const DefaultCheckpoint = {
@@ -124,7 +124,9 @@ export default class DownloadManager extends EventEmitter {
   constructor() {
     super();
 
-    this.#taskCheckpoint = Observable.from(this.loadCheckpoint(DATA_FILE_PATH));
+    this.#taskCheckpoint = Observable.from(
+      this.loadCheckpoint(CHECKPOINT_FILE_PATH)
+    );
   }
   //#endregion Constructor
 
@@ -345,7 +347,7 @@ export default class DownloadManager extends EventEmitter {
   makeObservableCallback(queueName) {
     return (changes) => {
       // write to json file
-      fs.writeJsonSync(DATA_FILE_PATH, this.#taskCheckpoint);
+      fs.writeJsonSync(CHECKPOINT_FILE_PATH, this.#taskCheckpoint);
 
       changes.forEach((change) => {
         if (change.type === "update") {

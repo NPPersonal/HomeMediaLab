@@ -11,8 +11,10 @@ export const downloadHLS = async (hlsUrl: string) => {
       headers,
     });
     if (!response.ok) throw new Error(response.statusText);
+    return await response.json();
   } catch (error) {
     console.error(error);
+    throw error;
   }
 };
 export const pauseTask = async (taskId: string) => {
@@ -27,6 +29,7 @@ export const pauseTask = async (taskId: string) => {
     // console.log(await response.json());
   } catch (err) {
     console.error(err);
+    throw err;
   }
 };
 
@@ -42,6 +45,7 @@ export const resumeTask = async (taskId: string) => {
     // console.log(await response.json());
   } catch (err) {
     console.error(err);
+    throw err;
   }
 };
 
@@ -57,6 +61,7 @@ export const cancelTask = async (taskId: string) => {
     // console.log(await response.json());
   } catch (err) {
     console.error(err);
+    throw err;
   }
 };
 
@@ -72,6 +77,7 @@ export const removeTaskFromCompleted = async (taskId: string) => {
     // console.log(await response.json());
   } catch (err) {
     console.error(err);
+    throw err;
   }
 };
 
@@ -87,6 +93,7 @@ export const removeTaskFromCanceled = async (taskId: string) => {
     // console.log(await response.json());
   } catch (err) {
     console.error(err);
+    throw err;
   }
 };
 

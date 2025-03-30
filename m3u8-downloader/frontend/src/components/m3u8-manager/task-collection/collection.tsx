@@ -1,13 +1,19 @@
 "use client";
 
-import { CheckpointType } from "@/hooks/download-checkpoints";
 import { Card } from "@/components/ui/card";
 import React from "react";
 import { Label } from "@/components/ui/label";
+import { CheckpointType } from "@/hooks/download-checkpoints";
 import TaskCardHeader from "./task-card/task-card-header";
 import TaskCardContent from "./task-card/task-card-content";
 interface PropType {
   tasks: Array<CheckpointType>;
+  /**
+   * Use custom rendering for task item
+   *
+   * A function take task data and return React node
+   * `(task)=>React.ReactNode`
+   */
   renderTask?: (task: CheckpointType) => React.ReactNode;
 }
 const TaskCollection = (props: PropType) => {

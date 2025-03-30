@@ -3,7 +3,7 @@ import React from "react";
 import { Label } from "@/components/ui/label";
 import KVAccordion from "@/components/kv-accordion/kv-accordion";
 import { Progress } from "@/components/ui/progress";
-import ListAccordion from "../../list-accordion/list-accordion";
+import ListAccordion from "@/components/list-accordion/list-accordion";
 import { TaskPropType } from "../types/task";
 
 const TaskCardContent = (props: TaskPropType) => {

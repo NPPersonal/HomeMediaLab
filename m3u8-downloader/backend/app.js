@@ -7,11 +7,17 @@ import { TEMP_DIR } from "./utils/constant.js";
 import { M3U8DownloadTask } from "./download-manager/tasks/m3u8-download-task.js";
 import DownloadManager from "./download-manager/download-manager.js";
 import { scrapeM3U8Urls } from "./utils/scrapper.js";
+import path from "node:path";
 
 const M3U8_MASTER_TEST_URL =
   "https://vip.lz-cdn6.com/20220817/22481_342a8e06/index.m3u8";
 const M3U8_TEST_URL =
   "https://vip.lz-cdn6.com/20220817/22481_342a8e06/1000k/hls/mixed.m3u8";
+
+const FILE_STORAGE_PATH = "./storage";
+const getOutputFilePath = (file_path) => {
+  return path.join(FILE_STORAGE_PATH, file_path);
+};
 
 //#region Server app setup
 const app = express();
@@ -80,7 +86,7 @@ app.get("/test", (req, res) => {
   const task = manager.addTask(
     new M3U8DownloadTask().init(
       M3U8_MASTER_TEST_URL,
-      "output/out.mp4",
+      getOutputFilePath("output/out.mp4"),
       TEMP_DIR
     )
   );
@@ -92,7 +98,11 @@ app.get("/download/hls", (req, res) => {
   const url = req.query.url;
 
   const task = manager.addTask(
-    new M3U8DownloadTask().init(url, "output/out.mp4", TEMP_DIR)
+    new M3U8DownloadTask().init(
+      url,
+      getOutputFilePath("output/out.mp4"),
+      TEMP_DIR
+    )
   );
   manager.startTaskBy(task.taskId);
   res.status(200).send(JSON.stringify({ taskId: task.taskId }));

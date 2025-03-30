@@ -21,13 +21,13 @@ export interface CheckpointType {
   eventLogs: Array<string>;
   errorLogs: Array<string>;
 }
-interface CheckpointQueuedType {
+export interface CheckpointQueuedType {
   queued: Array<CheckpointType>;
   completed: Array<CheckpointType>;
   canceled: Array<CheckpointType>;
 }
 
-interface SocketInfoType {
+export interface SocketInfoType {
   isConnected: boolean;
   socket: Socket | undefined;
   transport: string;
@@ -71,6 +71,7 @@ const useCheckpoints = () => {
     }));
 
     return () => {
+      console.log("useeffect destroy");
       if (socketInfo.socket) invalidateSocket(socketInfo.socket);
     };
 

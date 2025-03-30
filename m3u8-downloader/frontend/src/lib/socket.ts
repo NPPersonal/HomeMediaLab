@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use client";
-
 import { io, Socket } from "socket.io-client";
 
 const host = "http://localhost:3001";

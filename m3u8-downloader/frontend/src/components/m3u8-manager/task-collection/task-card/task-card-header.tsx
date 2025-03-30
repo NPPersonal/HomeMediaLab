@@ -1,7 +1,7 @@
 import React from "react";
 import { CardDescription, CardHeader } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { TaskPropType } from "../types/task";
+import { TaskPropType } from "../../m3u8-manager/task-collection/types/task";
 
 const TaskCardHeader = (props: TaskPropType) => {
   const { taskData } = props;
