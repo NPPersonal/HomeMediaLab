@@ -22,6 +22,9 @@ const TaskCardContent = (props: TaskPropType) => {
         triggerName="Information"
         kvObject={{
           Status: taskData.status,
+          "Created at": taskData.createdAt
+            ? new Date(taskData.createdAt).toLocaleString()
+            : "",
           "Source URL": taskData.m3u8Url,
           Output: taskData.output,
           "Working directory": taskData.workingDir,

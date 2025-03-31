@@ -8,6 +8,7 @@ import { CircleX } from "lucide-react";
 import { isM3U8Url, isUrl } from "@/lib/utils";
 import { downloadHLS, scrapeHLSFromWeb } from "@/actions/server-actions";
 import { toast } from "sonner";
+import HLSDownloadSetting from "./hls-download-setting";
 
 const HLSDownloader = () => {
   const [webUrl, setWebUrl] = useState("");
@@ -21,9 +22,9 @@ const HLSDownloader = () => {
     undefined
   );
 
-  const downloadHLSVideo = async (url: string) => {
+  const downloadHLSVideo = async (url: string, output: string) => {
     try {
-      await downloadHLS(url);
+      await downloadHLS(url, output);
     } catch (error) {
       if (error instanceof Error)
         toast.error(
@@ -112,7 +113,14 @@ const HLSDownloader = () => {
           return (
             <div key={url} className="flex flex-col items-center">
               <HLSVideoPlayer src={url} />
-              <Button onClick={() => downloadHLSVideo(url)}>Download</Button>
+              {/* <Button onClick={() => downloadHLSVideo(url)}>Download</Button> */}
+              <HLSDownloadSetting
+                url={url}
+                onConfirm={(value) => {
+                  downloadHLSVideo(value.url, value.filename);
+                  console.log(value);
+                }}
+              />
             </div>
           );
         })}

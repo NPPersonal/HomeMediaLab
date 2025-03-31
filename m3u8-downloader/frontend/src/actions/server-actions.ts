@@ -3,12 +3,13 @@
 const host = "http://localhost:3001";
 const headers = { "Content-Type": "application/json" };
 
-export const downloadHLS = async (hlsUrl: string) => {
+export const downloadHLS = async (hlsUrl: string, output: string) => {
   try {
-    const url = new URL(`/download/hls?url=${hlsUrl}`, host).href;
+    const url = new URL("/download/hls", host).href;
     const response = await fetch(url, {
-      method: "GET",
+      method: "POST",
       headers,
+      body: JSON.stringify({ url: hlsUrl, output: output }),
     });
     if (!response.ok) throw new Error(response.statusText);
     return await response.json();

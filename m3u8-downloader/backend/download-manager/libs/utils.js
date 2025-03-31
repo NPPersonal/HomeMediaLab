@@ -11,12 +11,12 @@ export function isUrl(uri) {
 }
 
 /**
- * Get current local date time
+ * Get current date time UTC
  *
  * @returns date time string
  */
 export function getDateTimeNow() {
-  return new Date().toLocaleString();
+  return new Date().toUTCString();
 }
 
 /**

@@ -1,7 +1,7 @@
 import React from "react";
 import { CardDescription, CardHeader } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { TaskPropType } from "../../m3u8-manager/task-collection/types/task";
+import { TaskPropType } from "../types/task";
 
 const TaskCardHeader = (props: TaskPropType) => {
   const { taskData } = props;
@@ -17,6 +17,12 @@ const TaskCardHeader = (props: TaskPropType) => {
           <Label htmlFor="term">Status:</Label>
           <span>{`${taskData.status}`}</span>
         </span>
+        {taskData.createdAt && (
+          <span className="flex space-x-1">
+            <Label htmlFor="term">Created at:</Label>
+            <span>{`${new Date(taskData.createdAt).toLocaleString()}`}</span>
+          </span>
+        )}
       </CardDescription>
     </CardHeader>
   );

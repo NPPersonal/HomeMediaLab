@@ -9,6 +9,7 @@ export interface CheckpointType {
   taskId: string;
   isRunning: boolean;
   status: string;
+  createdAt: number;
   m3u8Url: string;
   output: string;
   workingDir: string;

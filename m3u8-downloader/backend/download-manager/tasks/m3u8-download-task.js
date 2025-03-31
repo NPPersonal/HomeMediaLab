@@ -248,20 +248,21 @@ export class M3U8DownloadTask extends DownloadTask {
    *
    * @param {string} m3u8Url url to m3u8 file
    * @param {string} output output directory for video
-   * @param {string} workingDir task's working directory e.g `./tmp`,
+   * @param {string} rootDir task's root working directory e.g `./tmp`,
    * the actual working directory will be `workingDir/{taskId}`
    * @param {DefaultOptions} options options will passed to M3U8Downloader
    */
-  init(m3u8Url, output, workingDir, options = DefaultOptions) {
+  init(m3u8Url, output, rootDir, options = DefaultOptions) {
     super.init();
 
+    this.createdAt = Date.now();
     this.m3u8Url = m3u8Url;
-    this.workingDir = path.resolve(workingDir);
+    this.workingDir = path.resolve(path.join(rootDir, this.taskId));
     this.output = path.resolve(output);
     this.options = Object.assign(
       { ...DefaultOptions, ...options },
       {
-        segmentsDir: path.join(workingDir, this.taskId),
+        segmentsDir: this.workingDir,
       }
     );
 

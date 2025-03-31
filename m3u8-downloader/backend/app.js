@@ -79,6 +79,29 @@ const checkTaskId = (req, res, next) => {
   // console.log("middleware");
   next();
 };
+
+/**
+ * Middleware that check if download hls route's request contain correct
+ * parameters in body
+ *
+ * @param {*} req
+ * @param {*} res
+ * @param {*} next
+ */
+const checkDownloadHLSRequest = (req, res, next) => {
+  const { url, output } = req.body;
+  if (!url) {
+    res
+      .status(400)
+      .send(JSON.stringify({ message: "url is missing in request's body" }));
+  }
+  if (!output) {
+    res
+      .status(400)
+      .send(JSON.stringify({ message: "output is missing in request's body" }));
+  }
+  next();
+};
 //#endregion Express middleware
 
 //#region  API routes
@@ -94,15 +117,11 @@ app.get("/test", (req, res) => {
   res.send(`download started task id: ${task.taskId}`);
 });
 
-app.get("/download/hls", (req, res) => {
-  const url = req.query.url;
+app.post("/download/hls", checkDownloadHLSRequest, (req, res) => {
+  const { url, output } = req.body;
 
   const task = manager.addTask(
-    new M3U8DownloadTask().init(
-      url,
-      getOutputFilePath("output/out.mp4"),
-      TEMP_DIR
-    )
+    new M3U8DownloadTask().init(url, getOutputFilePath(output), TEMP_DIR)
   );
   manager.startTaskBy(task.taskId);
   res.status(200).send(JSON.stringify({ taskId: task.taskId }));
