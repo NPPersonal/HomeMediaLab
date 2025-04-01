@@ -703,20 +703,22 @@ export class M3U8DownloadTask extends DownloadTask {
    */
   async cleanUpDownloadedFiles() {
     if (!this.options.clean) return;
-    await Promise.all(
-      this.downloadedFiles.map(async (file) => {
-        try {
-          await fs.unlink(file);
-        } catch (err) {
-          this.changeStatus(DownloadTask.StateTypes.Error, () => {
-            const error = new Error(
-              `Clean up downloaded file fail ${file}\n${err.message}`
-            );
-            this.emit(DownloadTask.EventTypes.Error, this, error);
-          });
-        }
-      })
-    );
+    if (!this.options.deleteMergeSources) {
+      await Promise.all(
+        this.downloadedFiles.map(async (file) => {
+          try {
+            await fs.unlink(file);
+          } catch (err) {
+            this.changeStatus(DownloadTask.StateTypes.Error, () => {
+              const error = new Error(
+                `Clean up downloaded file fail ${file}\n${err.message}`
+              );
+              this.emit(DownloadTask.EventTypes.Error, this, error);
+            });
+          }
+        })
+      );
+    }
     if (this.options.convert2Mp4) {
       let mergedFilePath = path.resolve(this.segmentsDir, "output.ts");
       if (await fs.pathExists(mergedFilePath)) {

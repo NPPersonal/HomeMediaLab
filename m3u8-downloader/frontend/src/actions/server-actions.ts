@@ -5,7 +5,7 @@ const headers = { "Content-Type": "application/json" };
 
 export const downloadHLS = async (hlsUrl: string, output: string) => {
   try {
-    const url = new URL("/download/hls", host).href;
+    const url = new URL("/hls/download", host).href;
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -18,9 +18,22 @@ export const downloadHLS = async (hlsUrl: string, output: string) => {
     throw error;
   }
 };
+
+export const scrapeHLSFromWeb = async (webUrl: string) => {
+  try {
+    const url = new URL(`/hls/scrape?url=${webUrl}`, host).href;
+    const response = await fetch(url, { method: "GET", headers });
+    if (!response.ok) throw new Error(response.statusText);
+    return await response.json();
+  } catch (error) {
+    console.error(error);
+    throw new Error(`Error when scrapping HLS from web ${webUrl}`);
+  }
+};
+
 export const pauseTask = async (taskId: string) => {
   try {
-    const url = new URL("/pause", host).href;
+    const url = new URL("/task/pause", host).href;
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -36,7 +49,7 @@ export const pauseTask = async (taskId: string) => {
 
 export const resumeTask = async (taskId: string) => {
   try {
-    const url = new URL("/resume", host).href;
+    const url = new URL("/task/resume", host).href;
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -52,7 +65,7 @@ export const resumeTask = async (taskId: string) => {
 
 export const cancelTask = async (taskId: string) => {
   try {
-    const url = new URL("/cancel", host).href;
+    const url = new URL("/task/cancel", host).href;
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -68,7 +81,7 @@ export const cancelTask = async (taskId: string) => {
 
 export const removeTaskFromCompleted = async (taskId: string) => {
   try {
-    const url = new URL("/delete/from/completed", host).href;
+    const url = new URL("/task/delete/from/completed", host).href;
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -84,7 +97,7 @@ export const removeTaskFromCompleted = async (taskId: string) => {
 
 export const removeTaskFromCanceled = async (taskId: string) => {
   try {
-    const url = new URL("/delete/from/canceled", host).href;
+    const url = new URL("/task/delete/from/canceled", host).href;
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -95,17 +108,5 @@ export const removeTaskFromCanceled = async (taskId: string) => {
   } catch (err) {
     console.error(err);
     throw err;
-  }
-};
-
-export const scrapeHLSFromWeb = async (webUrl: string) => {
-  try {
-    const url = new URL(`/scrape/hls/from?url=${webUrl}`, host).href;
-    const response = await fetch(url, { method: "GET", headers });
-    if (!response.ok) throw new Error(response.statusText);
-    return await response.json();
-  } catch (error) {
-    console.error(error);
-    throw new Error(`Error when scrapping HLS from web ${webUrl}`);
   }
 };

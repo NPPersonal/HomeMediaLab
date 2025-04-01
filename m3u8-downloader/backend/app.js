@@ -3,21 +3,13 @@ import bodyParser from "body-parser";
 import cors from "cors";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { TEMP_DIR } from "./utils/constant.js";
+import { getTempDirectory } from "./utils/utils.js";
 import { M3U8DownloadTask } from "./download-manager/tasks/m3u8-download-task.js";
 import DownloadManager from "./download-manager/download-manager.js";
-import { scrapeM3U8Urls } from "./utils/scrapper.js";
-import path from "node:path";
-
-const M3U8_MASTER_TEST_URL =
-  "https://vip.lz-cdn6.com/20220817/22481_342a8e06/index.m3u8";
-const M3U8_TEST_URL =
-  "https://vip.lz-cdn6.com/20220817/22481_342a8e06/1000k/hls/mixed.m3u8";
-
-const FILE_STORAGE_PATH = "./storage";
-const getOutputFilePath = (file_path) => {
-  return path.join(FILE_STORAGE_PATH, file_path);
-};
+import { createRoute as createHLSRoute } from "./routes/hls.js";
+import { createRoute as createTaskRoute } from "./routes/task.js";
+import { getOutputFilePath } from "./utils/utils.js";
+import { createRoute as createTestRoute } from "./routes/test.js";
 
 //#region Server app setup
 const app = express();
@@ -105,84 +97,14 @@ const checkDownloadHLSRequest = (req, res, next) => {
 //#endregion Express middleware
 
 //#region  API routes
-app.get("/test", (req, res) => {
-  const task = manager.addTask(
-    new M3U8DownloadTask().init(
-      M3U8_MASTER_TEST_URL,
-      getOutputFilePath("output/out.mp4"),
-      TEMP_DIR
-    )
-  );
-  manager.startTaskBy(task.taskId);
-  res.send(`download started task id: ${task.taskId}`);
-});
+// test routes
+app.use("/test", createTestRoute(manager));
 
-app.post("/download/hls", checkDownloadHLSRequest, (req, res) => {
-  const { url, output } = req.body;
+// hls routes
+app.use("/hls", createHLSRoute(manager));
 
-  const task = manager.addTask(
-    new M3U8DownloadTask().init(url, getOutputFilePath(output), TEMP_DIR)
-  );
-  manager.startTaskBy(task.taskId);
-  res.status(200).send(JSON.stringify({ taskId: task.taskId }));
-});
-
-app.post("/delete/from/completed", checkTaskId, (req, res) => {
-  const { taskId } = req.body;
-
-  manager.removeTaskFromCompleted(taskId);
-  res.status(200).send(
-    JSON.stringify({
-      message: `remove task from completed with id: ${taskId}`,
-    })
-  );
-});
-
-app.post("/delete/from/canceled", checkTaskId, (req, res) => {
-  const { taskId } = req.body;
-
-  manager.removeTaskFromCanceled(taskId);
-  res.status(200).send(
-    JSON.stringify({
-      message: `remove task from canceled with id: ${taskId}`,
-    })
-  );
-});
-
-app.post("/pause", checkTaskId, (req, res) => {
-  const { taskId } = req.body;
-
-  manager.pauseTaskBy(taskId);
-  res.status(200).send(JSON.stringify({ message: `pause task id: ${taskId}` }));
-});
-
-app.post("/resume", checkTaskId, (req, res) => {
-  const { taskId } = req.body;
-
-  manager.resumeTaskBy(taskId);
-  res
-    .status(200)
-    .send(JSON.stringify({ message: `resume task id: ${taskId}` }));
-});
-
-app.post("/cancel", checkTaskId, (req, res) => {
-  const { taskId } = req.body;
-
-  manager.cancelTaskBy(taskId);
-  res
-    .status(200)
-    .send(JSON.stringify({ message: `cancel task id: ${taskId}` }));
-});
-
-app.get("/scrape/hls/from", async (req, res) => {
-  try {
-    const url = req.query.url;
-    const m3u8Urls = await scrapeM3U8Urls(url);
-    res.status(200).send({ data: m3u8Urls });
-  } catch (err) {
-    res.status(500).send({ message: err.message });
-  }
-});
+// task routes
+app.use("/task", createTaskRoute(manager));
 //#endregion API routes
 
 server.listen(port, () => {
