@@ -3,30 +3,34 @@ import bodyParser from "body-parser";
 import cors from "cors";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { getTempDirectory } from "./utils/utils.js";
-import { M3U8DownloadTask } from "./download-manager/tasks/m3u8-download-task.js";
 import DownloadManager from "./download-manager/download-manager.js";
 import { createRoute as createHLSRoute } from "./routes/hls.js";
 import { createRoute as createTaskRoute } from "./routes/task.js";
-import { getOutputFilePath } from "./utils/utils.js";
 import { createRoute as createTestRoute } from "./routes/test.js";
 
 //#region Server app setup
 const app = express();
+app.use(
+  bodyParser.urlencoded({
+    extended: true,
+  })
+);
 app.use(bodyParser.json());
 app.use(cors());
 const server = createServer(app);
 const io = new Server(server);
-const port = 3001;
+const port = process.env.PORT || 3001;
 //#endregion Server app setup
 
 //#region SocketIO
 // setup socket
 const checkpointSocket = io.of("/checkpoints");
 checkpointSocket.on("connection", (socket) => {
-  console.log("a user connected");
+  console.log(
+    `A user connected\nid: ${socket.id}\ntime: ${socket.handshake.time}\naddress: ${socket.handshake.address}\n`
+  );
   socket.on("disconnect", (reason) => {
-    console.log(`a user disconnected`, reason);
+    console.log(`A user with id: ${socket.id} disconnected`, reason);
   });
   // emit checkpoints data when the socket connected
   // console.log(manager.transformedCheckpoints);
@@ -107,6 +111,9 @@ app.use("/hls", createHLSRoute(manager));
 app.use("/task", createTaskRoute(manager));
 //#endregion API routes
 
-server.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+const appServer = server.listen(port, () => {
+  const address = appServer.address();
+  console.log(
+    `Server listening on address: ${address.address} port: ${address.port} family: ${address.family}\n`
+  );
 });
