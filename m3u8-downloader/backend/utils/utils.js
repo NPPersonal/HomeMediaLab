@@ -1,6 +1,4 @@
 import path from "path";
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
 
 const FILE_STORAGE_PATH = "./storage";
 export const getOutputFilePath = (file_path) => {
