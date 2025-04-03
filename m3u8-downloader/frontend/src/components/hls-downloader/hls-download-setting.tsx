@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import FileManager from "../file-manager/file-manager";
 
 interface SettingTypes {
   url: string;
@@ -76,6 +77,7 @@ const HLSDownloadSetting = (props: PropType) => {
             />
           </div>
         </div>
+        <FileManager />
         <DialogFooter>
           <Button onClick={onConfirmClick}>{`Confirm`}</Button>
         </DialogFooter>

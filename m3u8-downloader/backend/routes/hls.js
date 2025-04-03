@@ -3,7 +3,7 @@ import { checkDownloadHLSRequest } from "../middlewares/middlewares.js";
 import { M3U8DownloadTask } from "../download-manager/tasks/m3u8-download-task.js";
 import { getOutputFilePath, getTempDirectory } from "../utils/utils.js";
 import DownloadManager from "../download-manager/download-manager.js";
-import { scrapeM3U8Urls } from "../utils/scrapper.js";
+import { scrapeM3U8Urls } from "../utils/m3u8-scrapper.js";
 
 const router = express.Router();
 

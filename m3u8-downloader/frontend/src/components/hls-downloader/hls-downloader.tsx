@@ -45,6 +45,7 @@ const HLSDownloader = () => {
 
   useEffect(() => {
     async function scrapeHLS(url: string) {
+      if (!url) return;
       try {
         setIsScrapping(true);
         let data = undefined;
@@ -67,6 +68,8 @@ const HLSDownloader = () => {
           setScrappingError(new Error(`Scrapping HLS fail ${url}`));
         }
         setFoundHLSUrls(undefined);
+      } finally {
+        setScrappingUrl("");
       }
     }
 
@@ -78,10 +81,6 @@ const HLSDownloader = () => {
       }
     }
   }, [scrappingUrl]);
-
-  if (foundHLSUrls && foundHLSUrls.length === 0) {
-    return <div>{`Can't find any HLS video source`}</div>;
-  }
 
   return (
     <React.Fragment>
@@ -99,6 +98,9 @@ const HLSDownloader = () => {
         </div>
         {scrappingError && (
           <p className="text-red-500 break-all">{scrappingError.message}</p>
+        )}
+        {foundHLSUrls && foundHLSUrls.length === 0 && (
+          <p className="text-red-500 break-all">{`Can't find any HLS video source`}</p>
         )}
         <Button
           variant="outline"
