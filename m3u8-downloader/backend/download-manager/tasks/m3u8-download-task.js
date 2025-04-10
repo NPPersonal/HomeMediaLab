@@ -312,11 +312,16 @@ export class M3U8DownloadTask extends DownloadTask {
       this.start();
       return;
     }
-    this.changeStatus(DownloadTask.StateTypes.Downloading, () => {
-      this.addEventLog("Downloading");
-      this.emit(DownloadTask.EventTypes.Downloading, this);
-    });
-    this.queue.start();
+
+    if (lastState === DownloadTask.StateTypes.Downloading) {
+      this.changeStatus(DownloadTask.StateTypes.Downloading, () => {
+        this.addEventLog("Downloading");
+        this.emit(DownloadTask.EventTypes.Downloading, this);
+      });
+      this.queue.start();
+    } else {
+      this.start();
+    }
   }
 
   async doCancel() {
@@ -637,15 +642,17 @@ export class M3U8DownloadTask extends DownloadTask {
 
       // Merge the segment
       try {
-        const segmentData = await fs.readFile(segmentPath);
-        writeStream.write(segmentData);
+        if (fs.pathExistsSync(segmentPath)) {
+          const segmentData = await fs.readFile(segmentPath);
+          writeStream.write(segmentData);
 
-        // Whether to delete .ts source file after merged or not
-        if (deleteSource) await fs.unlink(segmentPath); // 删除临时 TS 片段文件
+          // Whether to delete .ts source file after merged or not
+          if (deleteSource) await fs.unlink(segmentPath); // 删除临时 TS 片段文件
+        }
       } catch (err) {
         this.changeStatus(DownloadTask.StateTypes.Error, () => {
           const error = new Error(
-            `Merge segment failed\nSegment ${index} is missing\nExpected file at path: ${segmentPath}\n${err.message}\n`
+            `Merge segment failed\nSegment ${index}\nSegment file at path: ${segmentPath}\n${err.message}\n`
           );
           this.emit(DownloadTask.EventTypes.Error, this, error);
         });
