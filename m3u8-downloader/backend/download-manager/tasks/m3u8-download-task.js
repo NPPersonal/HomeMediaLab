@@ -17,6 +17,8 @@ import {
   combineURL,
 } from "../libs/utils.js";
 import os from "node:os";
+import staticFFMPEG from "ffmpeg-static";
+import fluent_ffmpeg from "fluent-ffmpeg";
 
 export const DefaultOptions = {
   /** How many concurrent download to run */
@@ -35,7 +37,7 @@ export const DefaultOptions = {
   /** How many time to retry when download fail */
   retries: 3,
   /** Path to FFMPEG excutable file */
-  ffmpegPath: "ffmpeg",
+  ffmpegPath: path.resolve(staticFFMPEG) || "ffmpeg",
   /** Whether to clean files in directory when job is done */
   clean: true,
   /** Start index for picking a range of .ts file to download default to 0 */
@@ -107,6 +109,17 @@ export class M3U8DownloadTask extends DownloadTask {
       Merging: "merging",
       /** (task)=>void */
       Converting: "converting",
+      /** (task, progress)=>void 
+       * 
+       * @param {Object} progress
+       * ```
+       * {
+          percent: `progress in progress`
+        }
+       * ```
+       * 
+       */
+      Transcoding: "transcoding",
     },
     getTaskEventTypes()
   );
@@ -406,6 +419,11 @@ export class M3U8DownloadTask extends DownloadTask {
       this.progress = progressFloat;
     });
 
+    this.on(M3U8DownloadTask.EventTypes.Transcoding, (task, progress) => {
+      const progressFloat = progress.percent / 100.0;
+      this.progress = progressFloat;
+    });
+
     this.on(M3U8DownloadTask.EventTypes.Completed, (task) => {
       if (!this.options.interruptOnError) {
         this.progress = 1.0;
@@ -662,37 +680,60 @@ export class M3U8DownloadTask extends DownloadTask {
         this.emit(M3U8DownloadTask.EventTypes.Converting, this)
       );
 
-      // Use ffmpeg to convert merged .ts file into .mp4
-      // with command in a child process
-      const ffmpeg = spawn(this.options.ffmpegPath, [
-        "-i",
-        inputFilePath,
-        "-c",
-        "copy",
-        outputFilePath,
-        "-y",
-      ]);
-
-      ffmpeg.on("error", (err) => {
-        this.changeStatus(DownloadTask.StateTypes.Error, () => {
-          const error = new Error(`Failed to convert to MP4: ${err.message}`);
-          this.emit(DownloadTask.EventTypes.Error, this, error);
-        });
-        reject(error);
-      });
-
-      ffmpeg.on("close", (code) => {
-        if (code !== 0) {
+      fluent_ffmpeg.setFfmpegPath(this.options.ffmpegPath);
+      const cmd = fluent_ffmpeg()
+        .input(inputFilePath)
+        .output(outputFilePath)
+        .outputFormat("mp4")
+        .on("error", (err) => {
           this.changeStatus(DownloadTask.StateTypes.Error, () => {
-            const error = new Error(`FFmpeg process exited with code ${code}`);
+            const error = new Error(`Failed to convert to MP4: ${err.message}`);
             this.emit(DownloadTask.EventTypes.Error, this, error);
           });
-          reject(new Error(`FFmpeg process exited with code ${code}`));
-          return;
-        }
-        fs.unlinkSync(inputFilePath); // remove merged TS file
-        resolve(outputFilePath);
-      });
+          reject(error);
+        })
+        .on("progress", (progress) => {
+          this.emit(M3U8DownloadTask.EventTypes.Transcoding, this, {
+            percent: progress.percent,
+          });
+        })
+        .on("end", () => {
+          fs.unlinkSync(inputFilePath); // remove merged TS file
+          resolve(outputFilePath);
+        });
+      cmd.run();
+
+      // Use ffmpeg to convert merged .ts file into .mp4
+      // with command in a child process
+      // const ffmpeg = spawn(this.options.ffmpegPath, [
+      //   "-i",
+      //   inputFilePath,
+      //   "-c",
+      //   "copy",
+      //   outputFilePath,
+      //   "-y",
+      // ]);
+
+      // ffmpeg.on("error", (err) => {
+      //   this.changeStatus(DownloadTask.StateTypes.Error, () => {
+      //     const error = new Error(`Failed to convert to MP4: ${err.message}`);
+      //     this.emit(DownloadTask.EventTypes.Error, this, error);
+      //   });
+      //   reject(error);
+      // });
+
+      // ffmpeg.on("close", (code) => {
+      //   if (code !== 0) {
+      //     this.changeStatus(DownloadTask.StateTypes.Error, () => {
+      //       const error = new Error(`FFmpeg process exited with code ${code}`);
+      //       this.emit(DownloadTask.EventTypes.Error, this, error);
+      //     });
+      //     reject(new Error(`FFmpeg process exited with code ${code}`));
+      //     return;
+      //   }
+      //   fs.unlinkSync(inputFilePath); // remove merged TS file
+      //   resolve(outputFilePath);
+      // });
     });
   }
 

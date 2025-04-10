@@ -600,6 +600,13 @@ export default class DownloadManager extends EventEmitter {
       this.queueTaskUpdated(task);
     });
 
+    downloadTask.on(
+      M3U8DownloadTask.EventTypes.Transcoding,
+      (task, progress) => {
+        this.queueTaskUpdated(task);
+      }
+    );
+
     downloadTask.on(M3U8DownloadTask.EventTypes.Pause, (task) => {
       console.log(`Download task ${task.taskId} paused`);
       this.queueTaskUpdated(task);
